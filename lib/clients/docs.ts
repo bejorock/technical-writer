@@ -555,6 +555,205 @@ export class DocsClient {
   }
 
   /**
+   * Create a bulleted (unordered) list
+   * Inserts a bullet list item at the given index with optional nesting level
+   */
+  async createBulletList(
+    documentId: string,
+    text: string,
+    index: number,
+    nestingLevel?: number
+  ): Promise<void> {
+    const client = await this.getClient();
+    const endIndex = (await this.getDocument(documentId)).body?.content?.slice(-1)[0]?.endIndex || 1;
+    const insertIndex = index === 0 ? endIndex - 1 : index;
+
+    // Insert the text with a newline
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            insertText: {
+              location: {
+                index: insertIndex,
+              },
+              text: text + '\n',
+            },
+          },
+          {
+            createParagraphBullets: {
+              range: {
+                startIndex: insertIndex,
+                endIndex: insertIndex + text.length + 1,
+              },
+              bulletPreset: 'BULLET_DISC_CIRCLE_SQUARE',
+            },
+          },
+        ],
+      },
+    });
+
+    // Apply nesting level if specified
+    if (nestingLevel && nestingLevel > 0) {
+      await client.documents.batchUpdate({
+        documentId,
+        requestBody: {
+          requests: [
+            {
+              updateParagraphStyle: {
+                range: {
+                  startIndex: insertIndex,
+                  endIndex: insertIndex + text.length + 1,
+                },
+                paragraphStyle: {
+                  indentStart: {
+                    magnitude: nestingLevel * 36,
+                    unit: 'PT',
+                  },
+                },
+                fields: 'indentStart',
+              },
+            },
+          ],
+        },
+      });
+    }
+  }
+
+  /**
+   * Create a numbered (ordered) list
+   * Inserts a numbered list item at the given index with optional nesting level
+   */
+  async createNumberedList(
+    documentId: string,
+    text: string,
+    index: number,
+    nestingLevel?: number
+  ): Promise<void> {
+    const client = await this.getClient();
+    const endIndex = (await this.getDocument(documentId)).body?.content?.slice(-1)[0]?.endIndex || 1;
+    const insertIndex = index === 0 ? endIndex - 1 : index;
+
+    // Insert the text with a newline
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            insertText: {
+              location: {
+                index: insertIndex,
+              },
+              text: text + '\n',
+            },
+          },
+          {
+            createParagraphBullets: {
+              range: {
+                startIndex: insertIndex,
+                endIndex: insertIndex + text.length + 1,
+              },
+              bulletPreset: 'NUMBERED_DECIMAL_ALPHA_ROMAN',
+            },
+          },
+        ],
+      },
+    });
+
+    // Apply nesting level if specified
+    if (nestingLevel && nestingLevel > 0) {
+      await client.documents.batchUpdate({
+        documentId,
+        requestBody: {
+          requests: [
+            {
+              updateParagraphStyle: {
+                range: {
+                  startIndex: insertIndex,
+                  endIndex: insertIndex + text.length + 1,
+                },
+                paragraphStyle: {
+                  indentStart: {
+                    magnitude: nestingLevel * 36,
+                    unit: 'PT',
+                  },
+                },
+                fields: 'indentStart',
+              },
+            },
+          ],
+        },
+      });
+    }
+  }
+
+  /**
+   * Remove list formatting from a paragraph
+   * Converts a list item back to normal text
+   */
+  async removeListFormatting(
+    documentId: string,
+    startIndex: number,
+    endIndex: number
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            deleteParagraphBullets: {
+              range: {
+                startIndex,
+                endIndex,
+              },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Set the nesting level of a list item
+   * Adjusts the indentation to create nested lists
+   */
+  async setListNestingLevel(
+    documentId: string,
+    startIndex: number,
+    endIndex: number,
+    nestingLevel: number
+  ): Promise<void> {
+    const client = await this.getClient();
+    const indentMagnitude = nestingLevel * 36; // 36pt per level
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateParagraphStyle: {
+              range: {
+                startIndex,
+                endIndex,
+              },
+              paragraphStyle: {
+                indentStart: {
+                  magnitude: indentMagnitude,
+                  unit: 'PT',
+                },
+              },
+              fields: 'indentStart',
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
    * Create an image from URL
    */
   async insertImage(
@@ -579,6 +778,643 @@ export class DocsClient {
       documentId,
       requestBody: {
         requests: [imageRequest],
+      },
+    });
+  }
+
+  // ============================================
+  // Header and Footer Methods
+  // ============================================
+
+  /**
+   * Create a header in a document
+   * @param documentId - The document ID
+   * @param type - Header type: 'DEFAULT', 'HEADER_EVEN', 'HEADER_ODD', 'FIRST_PAGE_HEADER'
+   * @returns The created header ID
+   */
+  async createHeader(
+    documentId: string,
+    type: 'DEFAULT' | 'HEADER_EVEN' | 'HEADER_ODD' | 'FIRST_PAGE_HEADER' = 'DEFAULT'
+  ): Promise<{ headerId: string }> {
+    const client = await this.getClient();
+
+    const response = await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            createHeader: {
+              sectionBreakLocation: {
+                index: 0,
+              },
+              type: type as any,
+            },
+          },
+        ],
+      },
+    });
+
+    const headerId = response.data.replies?.[0]?.createHeader?.headerId;
+    if (!headerId) {
+      throw new Error('Failed to create header: No headerId returned');
+    }
+
+    return { headerId };
+  }
+
+  /**
+   * Create a footer in a document
+   * @param documentId - The document ID
+   * @param type - Footer type: 'DEFAULT', 'FOOTER_EVEN', 'FOOTER_ODD', 'FIRST_PAGE_FOOTER'
+   * @returns The created footer ID
+   */
+  async createFooter(
+    documentId: string,
+    type: 'DEFAULT' | 'FOOTER_EVEN' | 'FOOTER_ODD' | 'FIRST_PAGE_FOOTER' = 'DEFAULT'
+  ): Promise<{ footerId: string }> {
+    const client = await this.getClient();
+
+    const response = await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            createFooter: {
+              type: type as any,
+            },
+          },
+        ],
+      },
+    });
+
+    const footerId = response.data.replies?.[0]?.createFooter?.footerId;
+    if (!footerId) {
+      throw new Error('Failed to create footer: No footerId returned');
+    }
+
+    return { footerId };
+  }
+
+  /**
+   * Get all headers from a document
+   * @param documentId - The document ID
+   * @returns Map of header IDs to Header objects
+   */
+  async getHeaders(documentId: string): Promise<Record<string, any>> {
+    const client = await this.getClient();
+
+    const response = await client.documents.get({
+      documentId,
+      fields: 'headers',
+    });
+
+    return response.data.headers || {};
+  }
+
+  /**
+   * Get all footers from a document
+   * @param documentId - The document ID
+   * @returns Map of footer IDs to Footer objects
+   */
+  async getFooters(documentId: string): Promise<Record<string, any>> {
+    const client = await this.getClient();
+
+    const response = await client.documents.get({
+      documentId,
+      fields: 'footers',
+    });
+
+    return response.data.footers || {};
+  }
+
+  /**
+   * Delete a header from a document
+   * @param documentId - The document ID
+   * @param headerId - The header ID to delete
+   */
+  async deleteHeader(
+    documentId: string,
+    headerId: string
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            deleteHeader: {
+              headerId,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Delete a footer from a document
+   * @param documentId - The document ID
+   * @param footerId - The footer ID to delete
+   */
+  async deleteFooter(
+    documentId: string,
+    footerId: string
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            deleteFooter: {
+              footerId,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Insert text into a header
+   * @param documentId - The document ID
+   * @param headerId - The header ID
+   * @param text - The text to insert
+   * @param index - Position in the header (default 0)
+   */
+  async insertTextToHeader(
+    documentId: string,
+    headerId: string,
+    text: string,
+    index: number = 0
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            insertText: {
+              location: {
+                segmentId: headerId,
+                index,
+              },
+              text,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Insert text into a footer
+   * @param documentId - The document ID
+   * @param footerId - The footer ID
+   * @param text - The text to insert
+   * @param index - Position in the footer (default 0)
+   */
+  async insertTextToFooter(
+    documentId: string,
+    footerId: string,
+    text: string,
+    index: number = 0
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            insertText: {
+              location: {
+                segmentId: footerId,
+                index,
+              },
+              text,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Clear all content from a header
+   * @param documentId - The document ID
+   * @param headerId - The header ID
+   */
+  async clearHeader(
+    documentId: string,
+    headerId: string
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    // First, get the header content to find the range to delete
+    const headers = await this.getHeaders(documentId);
+    const header = headers[headerId];
+
+    if (header?.content) {
+      const endIndex = header.content.slice(-1)[0]?.endIndex || 1;
+      if (endIndex > 1) {
+        await client.documents.batchUpdate({
+          documentId,
+          requestBody: {
+            requests: [
+              {
+                deleteContentRange: {
+                  range: {
+                    startIndex: 1,
+                    endIndex: endIndex - 1,
+                    segmentId: headerId,
+                  },
+                },
+              },
+            ],
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * Clear all content from a footer
+   * @param documentId - The document ID
+   * @param footerId - The footer ID
+   */
+  async clearFooter(
+    documentId: string,
+    footerId: string
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    // First, get the footer content to find the range to delete
+    const footers = await this.getFooters(documentId);
+    const footer = footers[footerId];
+
+    if (footer?.content) {
+      const endIndex = footer.content.slice(-1)[0]?.endIndex || 1;
+      if (endIndex > 1) {
+        await client.documents.batchUpdate({
+          documentId,
+          requestBody: {
+            requests: [
+              {
+                deleteContentRange: {
+                  range: {
+                    startIndex: 1,
+                    endIndex: endIndex - 1,
+                    segmentId: footerId,
+                  },
+                },
+              },
+            ],
+          },
+        });
+      }
+    }
+  }
+
+  /**
+   * Replace all text in a header
+   * @param documentId - The document ID
+   * @param headerId - The header ID
+   * @param newText - The new text content
+   */
+  async replaceHeaderText(
+    documentId: string,
+    headerId: string,
+    newText: string
+  ): Promise<void> {
+    // Clear the header first, then insert new text
+    await this.clearHeader(documentId, headerId);
+    await this.insertTextToHeader(documentId, headerId, newText);
+  }
+
+  /**
+   * Replace all text in a footer
+   * @param documentId - The document ID
+   * @param footerId - The footer ID
+   * @param newText - The new text content
+   */
+  async replaceFooterText(
+    documentId: string,
+    footerId: string,
+    newText: string
+  ): Promise<void> {
+    // Clear the footer first, then insert new text
+    await this.clearFooter(documentId, footerId);
+    await this.insertTextToFooter(documentId, footerId, newText);
+  }
+
+  /**
+   * Format text in a header
+   * @param documentId - The document ID
+   * @param headerId - The header ID
+   * @param startIndex - Start of text range in header
+   * @param endIndex - End of text range in header
+   * @param format - Text formatting options
+   */
+  async formatHeaderText(
+    documentId: string,
+    headerId: string,
+    startIndex: number,
+    endIndex: number,
+    format: {
+      bold?: boolean;
+      italic?: boolean;
+      underline?: boolean;
+      strikethrough?: boolean;
+      fontFamily?: string;
+      fontSize?: number;
+      foregroundColor?: string;
+      backgroundColor?: string;
+    }
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    const textStyle: docs_v1.Schema$TextStyle = {};
+
+    if (format.bold !== undefined) textStyle.bold = format.bold;
+    if (format.italic !== undefined) textStyle.italic = format.italic;
+    if (format.underline !== undefined) textStyle.underline = format.underline;
+    if (format.strikethrough !== undefined) textStyle.strikethrough = format.strikethrough;
+
+    if (format.fontFamily) {
+      textStyle.weightedFontFamily = {
+        fontFamily: format.fontFamily,
+      };
+    }
+
+    if (format.fontSize) {
+      textStyle.fontSize = {
+        magnitude: format.fontSize,
+        unit: 'PT',
+      };
+    }
+
+    if (format.foregroundColor) {
+      textStyle.foregroundColor = {
+        color: {
+          rgbColor: this.parseColor(format.foregroundColor),
+        },
+      };
+    }
+
+    if (format.backgroundColor) {
+      textStyle.backgroundColor = {
+        color: {
+          rgbColor: this.parseColor(format.backgroundColor),
+        },
+      };
+    }
+
+    const fields = Object.keys(format)
+      .filter((k) => format[k as keyof typeof format] !== undefined)
+      .join(',');
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateTextStyle: {
+              range: {
+                startIndex,
+                endIndex,
+                segmentId: headerId,
+              },
+              textStyle,
+              fields,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Format text in a footer
+   * @param documentId - The document ID
+   * @param footerId - The footer ID
+   * @param startIndex - Start of text range in footer
+   * @param endIndex - End of text range in footer
+   * @param format - Text formatting options
+   */
+  async formatFooterText(
+    documentId: string,
+    footerId: string,
+    startIndex: number,
+    endIndex: number,
+    format: {
+      bold?: boolean;
+      italic?: boolean;
+      underline?: boolean;
+      strikethrough?: boolean;
+      fontFamily?: string;
+      fontSize?: number;
+      foregroundColor?: string;
+      backgroundColor?: string;
+    }
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    const textStyle: docs_v1.Schema$TextStyle = {};
+
+    if (format.bold !== undefined) textStyle.bold = format.bold;
+    if (format.italic !== undefined) textStyle.italic = format.italic;
+    if (format.underline !== undefined) textStyle.underline = format.underline;
+    if (format.strikethrough !== undefined) textStyle.strikethrough = format.strikethrough;
+
+    if (format.fontFamily) {
+      textStyle.weightedFontFamily = {
+        fontFamily: format.fontFamily,
+      };
+    }
+
+    if (format.fontSize) {
+      textStyle.fontSize = {
+        magnitude: format.fontSize,
+        unit: 'PT',
+      };
+    }
+
+    if (format.foregroundColor) {
+      textStyle.foregroundColor = {
+        color: {
+          rgbColor: this.parseColor(format.foregroundColor),
+        },
+      };
+    }
+
+    if (format.backgroundColor) {
+      textStyle.backgroundColor = {
+        color: {
+          rgbColor: this.parseColor(format.backgroundColor),
+        },
+      };
+    }
+
+    const fields = Object.keys(format)
+      .filter((k) => format[k as keyof typeof format] !== undefined)
+      .join(',');
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateTextStyle: {
+              range: {
+                startIndex,
+                endIndex,
+                segmentId: footerId,
+              },
+              textStyle,
+              fields,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Set paragraph alignment in a header
+   * @param documentId - The document ID
+   * @param headerId - The header ID
+   * @param startIndex - Start of paragraph range in header
+   * @param endIndex - End of paragraph range in header
+   * @param alignment - Text alignment
+   */
+  async setHeaderAlignment(
+    documentId: string,
+    headerId: string,
+    startIndex: number,
+    endIndex: number,
+    alignment: 'LEFT' | 'CENTER' | 'RIGHT' | 'JUSTIFY'
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateParagraphStyle: {
+              range: {
+                startIndex,
+                endIndex,
+                segmentId: headerId,
+              },
+              paragraphStyle: {
+                alignment: alignment as any,
+              },
+              fields: 'alignment',
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Set paragraph alignment in a footer
+   * @param documentId - The document ID
+   * @param footerId - The footer ID
+   * @param startIndex - Start of paragraph range in footer
+   * @param endIndex - End of paragraph range in footer
+   * @param alignment - Text alignment
+   */
+  async setFooterAlignment(
+    documentId: string,
+    footerId: string,
+    startIndex: number,
+    endIndex: number,
+    alignment: 'LEFT' | 'CENTER' | 'RIGHT' | 'JUSTIFY'
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateParagraphStyle: {
+              range: {
+                startIndex,
+                endIndex,
+                segmentId: footerId,
+              },
+              paragraphStyle: {
+                alignment: alignment as any,
+              },
+              fields: 'alignment',
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Set the starting page number for a section
+   * Note: Page number fields (AutoText) cannot be inserted via the API.
+   * Use this method to set the starting number, then add page numbers via UI.
+   * @param documentId - The document ID
+   * @param pageNumberStart - The starting page number (1-based)
+   */
+  async setPageNumberStart(
+    documentId: string,
+    pageNumberStart: number
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateDocumentStyle: {
+              documentStyle: {
+                pageNumberStart: pageNumberStart,
+              },
+              fields: "pageNumberStart",
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Enable or disable first page header/footer
+   * @param documentId - The document ID
+   * @param useFirstPageHeaderFooter - Whether to use different first page header/footer
+   */
+  async setUseFirstPageHeaderFooter(
+    documentId: string,
+    useFirstPageHeaderFooter: boolean
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateDocumentStyle: {
+              documentStyle: {
+                useFirstPageHeaderFooter: useFirstPageHeaderFooter,
+              },
+              fields: "useFirstPageHeaderFooter",
+            },
+          },
+        ],
       },
     });
   }

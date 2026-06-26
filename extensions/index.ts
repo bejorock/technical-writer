@@ -121,7 +121,9 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
     promptGuidelines: [
       "ALWAYS use google_docs when the user asks to create, edit, or manage ANY document (Google Doc, docx, or similar).",
       "NEVER use the built-in write tool for documents - always use google_docs instead.",
-      "Supports operations: create, get, list, delete, rename, insert_text, append_text, find_replace, format_text, insert_table, insert_paragraph.",
+      "Supports operations: create, get, list, delete, rename, insert_text, append_text, find_replace, format_text, insert_table, insert_paragraph, insert_bullet_list, insert_numbered_list, remove_list, set_nesting_level.",
+      "Header/Footer operations: create_header, create_footer, get_headers, get_footers, delete_header, delete_footer, insert_header_text, insert_footer_text, clear_header, clear_footer, replace_header_text, replace_footer_text, format_header_text, format_footer_text, set_header_alignment, set_footer_alignment, set_page_number_start, set_first_page_header_footer.",
+      "Note: Page number fields (AutoText) cannot be inserted via the Google Docs API. Use set_page_number_start to set the starting number, then add page numbers via the Google Docs UI.",
     ],
     parameters: Type.Object({
       operation: Type.Union(
@@ -141,6 +143,28 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
           Type.Literal("format_text"),
           Type.Literal("insert_table"),
           Type.Literal("insert_paragraph"),
+          Type.Literal("insert_bullet_list"),
+          Type.Literal("insert_numbered_list"),
+          Type.Literal("remove_list"),
+          Type.Literal("set_nesting_level"),
+          Type.Literal("create_header"),
+          Type.Literal("create_footer"),
+          Type.Literal("get_headers"),
+          Type.Literal("get_footers"),
+          Type.Literal("delete_header"),
+          Type.Literal("delete_footer"),
+          Type.Literal("insert_header_text"),
+          Type.Literal("insert_footer_text"),
+          Type.Literal("clear_header"),
+          Type.Literal("clear_footer"),
+          Type.Literal("replace_header_text"),
+          Type.Literal("replace_footer_text"),
+          Type.Literal("format_header_text"),
+          Type.Literal("format_footer_text"),
+          Type.Literal("set_header_alignment"),
+          Type.Literal("set_footer_alignment"),
+          Type.Literal("set_page_number_start"),
+          Type.Literal("set_first_page_header_footer"),
         ],
         { description: "Operation to perform" }
       ),
@@ -227,6 +251,43 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
             tableData: Type.Optional(Type.Array(Type.Array(Type.String()), { description: "Table data (for table type)" })),
           }),
           { description: "Document content structure (for create_document operation)" }
+        )
+      ),
+      listItems: Type.Optional(
+        Type.Array(
+          Type.Object({
+            text: Type.String({ description: "List item text" }),
+            nestingLevel: Type.Optional(Type.Number({ description: "Nesting level (0 = root, 1 = first indent, etc.)" })),
+          }),
+          { description: "List items (for insert_bullet_list and insert_numbered_list)" }
+        )
+      ),
+      nestingLevel: Type.Optional(
+        Type.Number({ description: "Nesting level for set_nesting_level operation (0-8)" }
+        )
+      ),
+      headerId: Type.Optional(
+        Type.String({ description: "Header ID (for header operations)" })
+      ),
+      footerId: Type.Optional(
+        Type.String({ description: "Footer ID (for footer operations)" })
+      ),
+      pageNumberStart: Type.Optional(
+        Type.Number({ description: "Starting page number (for set_page_number_start)" })
+      ),
+      useFirstPageHeaderFooter: Type.Optional(
+        Type.Boolean({ description: "Use different first page header/footer (for set_first_page_header_footer)" })
+      ),
+      headerType: Type.Optional(
+        Type.Union(
+          [Type.Literal("DEFAULT"), Type.Literal("HEADER_EVEN"), Type.Literal("HEADER_ODD"), Type.Literal("FIRST_PAGE_HEADER")],
+          { description: "Header type" }
+        )
+      ),
+      footerType: Type.Optional(
+        Type.Union(
+          [Type.Literal("DEFAULT"), Type.Literal("FOOTER_EVEN"), Type.Literal("FOOTER_ODD"), Type.Literal("FIRST_PAGE_FOOTER")],
+          { description: "Footer type" }
         )
       ),
       formatOptions: Type.Optional(
@@ -786,6 +847,475 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
                   text: `Inserted paragraph with style: ${params.style || "normal"}`,
                 },
               ],
+            };
+          }
+
+          case "insert_bullet_list": {
+            if (!params.documentId || !params.listItems || params.index === undefined) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: "Error: documentId, listItems, and index are required",
+                  },
+                ],
+                isError: true,
+              };
+            }
+            const bulletListId = extractFileId(params.documentId);
+            let bulletIndex = params.index;
+            
+            for (const item of params.listItems) {
+              await docsClient.createBulletList(
+                bulletListId,
+                item.text,
+                bulletIndex,
+                item.nestingLevel
+              );
+              // Update index for next item (text + newline + potential newline)
+              bulletIndex += item.text.length + 2;
+            }
+            
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Inserted bullet list with ${params.listItems.length} items`,
+                },
+              ],
+            };
+          }
+
+          case "insert_numbered_list": {
+            if (!params.documentId || !params.listItems || params.index === undefined) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: "Error: documentId, listItems, and index are required",
+                  },
+                ],
+                isError: true,
+              };
+            }
+            const numberedListId = extractFileId(params.documentId);
+            let numberedIndex = params.index;
+            
+            for (const item of params.listItems) {
+              await docsClient.createNumberedList(
+                numberedListId,
+                item.text,
+                numberedIndex,
+                item.nestingLevel
+              );
+              // Update index for next item (text + newline + potential newline)
+              numberedIndex += item.text.length + 2;
+            }
+            
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Inserted numbered list with ${params.listItems.length} items`,
+                },
+              ],
+            };
+          }
+
+          case "remove_list": {
+            if (!params.documentId || params.startIndex === undefined || params.endIndex === undefined) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: "Error: documentId, startIndex, and endIndex are required",
+                  },
+                ],
+                isError: true,
+              };
+            }
+            const removeListId = extractFileId(params.documentId);
+            await docsClient.removeListFormatting(
+              removeListId,
+              params.startIndex,
+              params.endIndex
+            );
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Removed list formatting from range ${params.startIndex} to ${params.endIndex}`,
+                },
+              ],
+            };
+          }
+
+          case "set_nesting_level": {
+            if (!params.documentId || params.startIndex === undefined || params.endIndex === undefined || params.nestingLevel === undefined) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: "Error: documentId, startIndex, endIndex, and nestingLevel are required",
+                  },
+                ],
+                isError: true,
+              };
+            }
+            const nestingId = extractFileId(params.documentId);
+            await docsClient.setListNestingLevel(
+              nestingId,
+              params.startIndex,
+              params.endIndex,
+              params.nestingLevel
+            );
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Set nesting level to ${params.nestingLevel} for range ${params.startIndex} to ${params.endIndex}`,
+                },
+              ],
+            };
+          }
+
+          // ============================================
+          // Header and Footer Operations
+          // ============================================
+
+          case "create_header": {
+            if (!params.documentId) {
+              return {
+                content: [{ type: "text", text: "Error: documentId is required" }],
+                isError: true,
+              };
+            }
+            const createHeaderId = extractFileId(params.documentId);
+            const headerResult = await docsClient.createHeader(
+              createHeaderId,
+              params.headerType as any || 'DEFAULT'
+            );
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Created header with ID: ${headerResult.headerId}`,
+                },
+              ],
+              details: headerResult,
+            };
+          }
+
+          case "create_footer": {
+            if (!params.documentId) {
+              return {
+                content: [{ type: "text", text: "Error: documentId is required" }],
+                isError: true,
+              };
+            }
+            const createFooterId = extractFileId(params.documentId);
+            const footerResult = await docsClient.createFooter(
+              createFooterId,
+              params.footerType as any || 'DEFAULT'
+            );
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Created footer with ID: ${footerResult.footerId}`,
+                },
+              ],
+              details: footerResult,
+            };
+          }
+
+          case "get_headers": {
+            if (!params.documentId) {
+              return {
+                content: [{ type: "text", text: "Error: documentId is required" }],
+                isError: true,
+              };
+            }
+            const getHeadersId = extractFileId(params.documentId);
+            const headers = await docsClient.getHeaders(getHeadersId);
+            const headerIds = Object.keys(headers);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: headerIds.length > 0
+                    ? `Found ${headerIds.length} header(s):\n${headerIds.map(id => `- ${id}`).join('\n')}`
+                    : 'No headers found in document',
+                },
+              ],
+              details: headers,
+            };
+          }
+
+          case "get_footers": {
+            if (!params.documentId) {
+              return {
+                content: [{ type: "text", text: "Error: documentId is required" }],
+                isError: true,
+              };
+            }
+            const getFootersId = extractFileId(params.documentId);
+            const footers = await docsClient.getFooters(getFootersId);
+            const footerIds = Object.keys(footers);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: footerIds.length > 0
+                    ? `Found ${footerIds.length} footer(s):\n${footerIds.map(id => `- ${id}`).join('\n')}`
+                    : 'No footers found in document',
+                },
+              ],
+              details: footers,
+            };
+          }
+
+          case "delete_header": {
+            if (!params.documentId || !params.headerId) {
+              return {
+                content: [{ type: "text", text: "Error: documentId and headerId are required" }],
+                isError: true,
+              };
+            }
+            const deleteHeaderId = extractFileId(params.documentId);
+            await docsClient.deleteHeader(deleteHeaderId, params.headerId);
+            return {
+              content: [{ type: "text", text: `Deleted header: ${params.headerId}` }],
+            };
+          }
+
+          case "delete_footer": {
+            if (!params.documentId || !params.footerId) {
+              return {
+                content: [{ type: "text", text: "Error: documentId and footerId are required" }],
+                isError: true,
+              };
+            }
+            const deleteFooterId = extractFileId(params.documentId);
+            await docsClient.deleteFooter(deleteFooterId, params.footerId);
+            return {
+              content: [{ type: "text", text: `Deleted footer: ${params.footerId}` }],
+            };
+          }
+
+          case "insert_header_text": {
+            if (!params.documentId || !params.headerId || params.text === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, headerId, and text are required" }],
+                isError: true,
+              };
+            }
+            const insertHeaderId = extractFileId(params.documentId);
+            await docsClient.insertTextToHeader(
+              insertHeaderId,
+              params.headerId,
+              params.text,
+              params.index || 0
+            );
+            return {
+              content: [{ type: "text", text: `Inserted text into header at position ${params.index || 0}` }],
+            };
+          }
+
+          case "insert_footer_text": {
+            if (!params.documentId || !params.footerId || params.text === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, footerId, and text are required" }],
+                isError: true,
+              };
+            }
+            const insertFooterId = extractFileId(params.documentId);
+            await docsClient.insertTextToFooter(
+              insertFooterId,
+              params.footerId,
+              params.text,
+              params.index || 0
+            );
+            return {
+              content: [{ type: "text", text: `Inserted text into footer at position ${params.index || 0}` }],
+            };
+          }
+
+          case "clear_header": {
+            if (!params.documentId || !params.headerId) {
+              return {
+                content: [{ type: "text", text: "Error: documentId and headerId are required" }],
+                isError: true,
+              };
+            }
+            const clearHeaderId = extractFileId(params.documentId);
+            await docsClient.clearHeader(clearHeaderId, params.headerId);
+            return {
+              content: [{ type: "text", text: `Cleared header content: ${params.headerId}` }],
+            };
+          }
+
+          case "clear_footer": {
+            if (!params.documentId || !params.footerId) {
+              return {
+                content: [{ type: "text", text: "Error: documentId and footerId are required" }],
+                isError: true,
+              };
+            }
+            const clearFooterId = extractFileId(params.documentId);
+            await docsClient.clearFooter(clearFooterId, params.footerId);
+            return {
+              content: [{ type: "text", text: `Cleared footer content: ${params.footerId}` }],
+            };
+          }
+
+          case "replace_header_text": {
+            if (!params.documentId || !params.headerId || params.text === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, headerId, and text are required" }],
+                isError: true,
+              };
+            }
+            const replaceHeaderId = extractFileId(params.documentId);
+            await docsClient.replaceHeaderText(
+              replaceHeaderId,
+              params.headerId,
+              params.text
+            );
+            return {
+              content: [{ type: "text", text: `Replaced header text with: ${params.text}` }],
+            };
+          }
+
+          case "replace_footer_text": {
+            if (!params.documentId || !params.footerId || params.text === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, footerId, and text are required" }],
+                isError: true,
+              };
+            }
+            const replaceFooterId = extractFileId(params.documentId);
+            await docsClient.replaceFooterText(
+              replaceFooterId,
+              params.footerId,
+              params.text
+            );
+            return {
+              content: [{ type: "text", text: `Replaced footer text with: ${params.text}` }],
+            };
+          }
+
+          case "format_header_text": {
+            if (!params.documentId || !params.headerId || params.startIndex === undefined || params.endIndex === undefined || !params.formatOptions) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, headerId, startIndex, endIndex, and formatOptions are required" }],
+                isError: true,
+              };
+            }
+            const formatHeaderId = extractFileId(params.documentId);
+            await docsClient.formatHeaderText(
+              formatHeaderId,
+              params.headerId,
+              params.startIndex,
+              params.endIndex,
+              params.formatOptions
+            );
+            return {
+              content: [{ type: "text", text: `Formatted header text from ${params.startIndex} to ${params.endIndex}` }],
+            };
+          }
+
+          case "format_footer_text": {
+            if (!params.documentId || !params.footerId || params.startIndex === undefined || params.endIndex === undefined || !params.formatOptions) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, footerId, startIndex, endIndex, and formatOptions are required" }],
+                isError: true,
+              };
+            }
+            const formatFooterId = extractFileId(params.documentId);
+            await docsClient.formatFooterText(
+              formatFooterId,
+              params.footerId,
+              params.startIndex,
+              params.endIndex,
+              params.formatOptions
+            );
+            return {
+              content: [{ type: "text", text: `Formatted footer text from ${params.startIndex} to ${params.endIndex}` }],
+            };
+          }
+
+          case "set_header_alignment": {
+            if (!params.documentId || !params.headerId || params.startIndex === undefined || params.endIndex === undefined || !params.alignment) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, headerId, startIndex, endIndex, and alignment are required" }],
+                isError: true,
+              };
+            }
+            const alignHeaderId = extractFileId(params.documentId);
+            await docsClient.setHeaderAlignment(
+              alignHeaderId,
+              params.headerId,
+              params.startIndex,
+              params.endIndex,
+              params.alignment as any
+            );
+            return {
+              content: [{ type: "text", text: `Set header alignment to ${params.alignment}` }],
+            };
+          }
+
+          case "set_footer_alignment": {
+            if (!params.documentId || !params.footerId || params.startIndex === undefined || params.endIndex === undefined || !params.alignment) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, footerId, startIndex, endIndex, and alignment are required" }],
+                isError: true,
+              };
+            }
+            const alignFooterId = extractFileId(params.documentId);
+            await docsClient.setFooterAlignment(
+              alignFooterId,
+              params.footerId,
+              params.startIndex,
+              params.endIndex,
+              params.alignment as any
+            );
+            return {
+              content: [{ type: "text", text: `Set footer alignment to ${params.alignment}` }],
+            };
+          }
+
+          case "set_page_number_start": {
+            if (!params.documentId || params.pageNumberStart === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId and pageNumberStart are required" }],
+                isError: true,
+              };
+            }
+            const pageNumberId = extractFileId(params.documentId);
+            await docsClient.setPageNumberStart(
+              pageNumberId,
+              params.pageNumberStart
+            );
+            return {
+              content: [{ type: "text", text: `Set page number start to ${params.pageNumberStart}` }],
+            };
+          }
+
+          case "set_first_page_header_footer": {
+            if (!params.documentId || params.useFirstPageHeaderFooter === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId and useFirstPageHeaderFooter are required" }],
+                isError: true,
+              };
+            }
+            const firstPageId = extractFileId(params.documentId);
+            await docsClient.setUseFirstPageHeaderFooter(
+              firstPageId,
+              params.useFirstPageHeaderFooter
+            );
+            return {
+              content: [{ type: "text", text: `Set first page header/footer to ${params.useFirstPageHeaderFooter}` }],
             };
           }
 
