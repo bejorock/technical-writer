@@ -1,4 +1,9 @@
-# Example Skill
+---
+name: technical-writing
+description: Best practices for technical documentation and writing
+---
+
+# Technical Writing Skill
 
 Use this skill when the user asks about technical writing best practices.
 
