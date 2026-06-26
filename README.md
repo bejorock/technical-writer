@@ -1,15 +1,31 @@
 # Technical Writer - Google Docs/Sheets Pi Extension
 
-A pi agent extension for Google Docs and Sheets integration using service account authentication.
+A pi agent extension for Google Docs and Sheets integration using **local document generation**.
 
 ## Features
 
-- 📄 **Google Docs** - Create, read, update, format documents
-- 📊 **Google Sheets** - Create, read, write, format spreadsheets
-- 📁 **Google Drive** - Manage files and folders
-- 📥 **Export** - Download as PDF, DOCX, XLSX, CSV, TSV
+- 📄 **Google Docs** - Create documents locally with full formatting control
+- 📊 **Google Sheets** - Create spreadsheets locally with full formatting control
+- 📁 **Google Drive** - Upload files to Google Drive
+- 📥 **Export** - Convert to PDF using LibreOffice
 - 🖼️ **Image Tools** - Convert PDF to images, crop images
 - 🔐 **Service Account Auth** - Secure authentication via GCP
+
+## How It Works
+
+This extension uses **local generation** instead of Google Docs/Sheets API:
+
+1. **Create documents locally** using the `docx` library (DOCX files)
+2. **Create spreadsheets locally** using the `xlsx` library (XLSX files)
+3. **Upload to Google Drive** for cloud access
+4. **Convert to PDF** using LibreOffice (optional)
+
+Benefits:
+- ✅ Full control over formatting
+- ✅ No API limitations or index errors
+- ✅ Faster creation (no network latency)
+- ✅ Works offline
+- ✅ Reliable and predictable
 
 ## Installation
 
@@ -213,17 +229,32 @@ google_docs({ operation: "get", documentId: "https://docs.google.com/document/d/
 pi -e ./extensions/index.ts -p "Create a project proposal document with sections: Introduction, Goals, Timeline, Budget"
 ```
 
+**What happens:**
+1. Creates a local DOCX file with full formatting
+2. Uploads to Google Drive
+3. Returns Google Drive link
+
 ### Create and Format a Spreadsheet
 
 ```bash
 pi -e ./extensions/index.ts -p "Create an expense tracker with columns: Date, Description, Amount, Category. Add 5 sample rows."
 ```
 
+**What happens:**
+1. Creates a local XLSX file with formatting
+2. Uploads to Google Drive
+3. Returns Google Drive link
+
 ### Export and Convert
 
 ```bash
 pi -e ./extensions/index.ts -p "Export the expense tracker to CSV and the proposal to PDF"
 ```
+
+**What happens:**
+1. Downloads file from Google Drive
+2. Converts locally using LibreOffice
+3. Uploads converted file to Google Drive
 
 ### List and Organize
 
@@ -274,6 +305,26 @@ npm run build
 - Google Cloud project with APIs enabled
 - Service account with Editor role
 - Shared Drive folder
+- **LibreOffice** (optional, for PDF conversion)
+
+## Local Generation Libraries
+
+This extension uses the following libraries for local document generation:
+
+### docx (DOCX files)
+- **Purpose:** Create Word documents with full formatting control
+- **Features:** Paragraphs, tables, headings, lists, formatting, styles
+- **Documentation:** https://docx.js.org
+
+### xlsx (XLSX files)
+- **Purpose:** Create Excel spreadsheets with formatting
+- **Features:** Cells, ranges, formulas, formatting, multiple sheets
+- **Documentation:** https://docs.sheetjs.com
+
+### LibreOffice (PDF conversion)
+- **Purpose:** Convert documents to PDF format
+- **Installation:** `brew install libreoffice` (macOS)
+- **Usage:** Command-line conversion via `--headless` mode
 
 ## License
 

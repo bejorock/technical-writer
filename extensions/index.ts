@@ -19,6 +19,9 @@ import { DriveClient } from "../lib/clients/drive";
 import { ExportClient } from "../lib/export";
 import { PreviewClient } from "../lib/preview";
 import { extractFolderId, extractFileId } from "../lib/utils";
+import { DocumentGenerator, createDocument } from "../lib/generators/document";
+import { SpreadsheetGenerator, createSpreadsheet } from "../lib/generators/spreadsheet";
+import { PDFConverter, convertToPDF } from "../lib/converters/pdf";
 
 // Client instances with config tracking
 let currentConfigHash: string | null = null;
@@ -93,7 +96,8 @@ This project has Google Docs/Sheets integration via the Technical Writer extensi
 - When the user asks to edit a document, use google_docs tool
 - When the user asks to edit a spreadsheet, use google_sheets tool
 - NEVER use the built-in write tool to create .docx, .xlsx, or similar files
-- The extension creates files directly in Google Drive (cloud), not locally
+- The extension creates files locally first, then uploads to Google Drive
+- Local generation provides full control over formatting
 
 Available tools: google_docs, google_sheets, google_drive, google_export, image_tool
 `,
@@ -419,91 +423,70 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
                 isError: true,
               };
             }
-            const folderId = extractFolderId(config.targetFolderId);
-            const doc = await docsClient.createDocument(params.title, folderId);
+            
+            // Create document locally using docx library
+            const docGen = createDocument({ title: params.title });
             
             // Process all content elements
             for (const item of params.content) {
-              const endIndex = await docsClient.getEndIndex(doc.documentId);
-              
               switch (item.type) {
                 case "heading":
-                case "paragraph": {
-                  // Get end index before inserting
-                  const preInsertIndex = await docsClient.getEndIndex(doc.documentId);
-                  await docsClient.appendText(doc.documentId, (item.text || '') + '\n');
-                  // Get the paragraph we just inserted
-                  const docData = await docsClient.getDocument(doc.documentId);
-                  const content = docData.body?.content || [];
-                  // Find the paragraph that starts at preInsertIndex
-                  const newParagraph = content.find(
-                    el => el.paragraph && el.startIndex === preInsertIndex
-                  );
-                  if (newParagraph) {
-                    if (item.style) {
-                      await docsClient.setNamedStyle(
-                        doc.documentId,
-                        newParagraph.startIndex!,
-                        newParagraph.endIndex!,
-                        item.style as any
-                      );
-                    }
-                    if (item.alignment) {
-                      await docsClient.setParagraphAlignment(
-                        doc.documentId,
-                        newParagraph.startIndex!,
-                        newParagraph.endIndex!,
-                        item.alignment as any
-                      );
-                    }
-                  }
+                  docGen.addHeading(item.text || '', 1);
                   break;
-                }
+                
+                case "paragraph":
+                  docGen.addParagraph({
+                    text: item.text || '',
+                    alignment: item.alignment?.toLowerCase() as any || 'justified',
+                    bold: item.bold,
+                    italic: item.italic,
+                  });
+                  break;
                 
                 case "list_item":
-                  await docsClient.appendText(doc.documentId, '- ' + (item.text || '') + '\n');
+                  docGen.addParagraph({
+                    text: `• ${item.text || ''}`,
+                    indent: { left: 0.5 },
+                  });
                   break;
                 
                 case "table":
                   if (item.rows && item.columns && item.tableData) {
-                    await docsClient.insertTable(doc.documentId, item.rows, item.columns, endIndex);
-                    // Fill table data
-                    const docData = await docsClient.getDocument(doc.documentId);
-                    const tables = docData.body?.content?.filter(el => el.table) || [];
-                    const lastTable = tables[tables.length - 1];
-                    if (lastTable?.table?.tableRows) {
-                      // Fill in reverse order to avoid index shifting
-                      for (let r = lastTable.table.tableRows.length - 1; r >= 0; r--) {
-                        const row = lastTable.table.tableRows[r];
-                        if (row.tableCells) {
-                          for (let c = row.tableCells.length - 1; c >= 0; c--) {
-                            const cell = row.tableCells[c];
-                            const insertIndex = cell.content?.[0]?.startIndex || cell.startIndex + 1;
-                            const cellText = item.tableData[r]?.[c] || '';
-                            if (cellText) {
-                              await docsClient.insertText(doc.documentId, cellText, insertIndex);
-                            }
-                          }
-                        }
-                      }
-                    }
+                    docGen.addTable({
+                      rows: item.tableData.map((row: string[]) => ({
+                        cells: row.map((cell: string) => ({ text: cell })),
+                      })),
+                    });
                   }
                   break;
                 
                 case "page_break":
-                  await docsClient.insertPageBreak(doc.documentId, endIndex);
+                  docGen.addPageBreak();
                   break;
               }
             }
+            
+            // Generate local file
+            const localPath = `./output/${params.title}.docx`;
+            await docGen.generate(localPath);
+            
+            // Upload to Google Drive
+            const folderId = extractFolderId(config.targetFolderId);
+            const { driveClient: dc } = getClients(ctx.cwd);
+            const file = await dc.uploadFile(
+              localPath,
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              folderId
+            );
             
             return {
               content: [
                 {
                   type: "text",
-                  text: `Created document: ${doc.documentId}\nTitle: ${doc.title}\nContent: ${params.content.length} elements added`,
+                  text: `Created document: ${file.id}\nTitle: ${params.title}\nContent: ${params.content.length} elements added\nLocal file: ${localPath}\nGoogle Drive: https://docs.google.com/document/d/${file.id}/edit`,
                 },
               ],
-              details: { documentId: doc.documentId, title: doc.title },
+              details: { documentId: file.id, title: params.title, localPath },
             };
           }
 
@@ -514,16 +497,41 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
                 isError: true,
               };
             }
+            
+            // Create document locally using docx library
+            const doc = createDocument({ title: params.title });
+            
+            // Add title if provided
+            if (params.text) {
+              doc.addParagraph({
+                text: params.text,
+                bold: true,
+                fontSize: 14,
+                alignment: 'center',
+              });
+            }
+            
+            // Generate local file
+            const localPath = `./output/${params.title}.docx`;
+            await doc.generate(localPath);
+            
+            // Upload to Google Drive
             const folderId = extractFolderId(config.targetFolderId);
-            const doc = await docsClient.createDocument(params.title, folderId);
+            const { driveClient: dc } = getClients(ctx.cwd);
+            const file = await dc.uploadFile(
+              localPath,
+              'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+              folderId
+            );
+            
             return {
               content: [
                 {
                   type: "text",
-                  text: `Created document: ${doc.documentId}\nTitle: ${doc.title}`,
+                  text: `Created document: ${file.id}\nTitle: ${params.title}\nLocal file: ${localPath}\nGoogle Drive: https://docs.google.com/document/d/${file.id}/edit`,
                 },
               ],
-              details: { documentId: doc.documentId, title: doc.title },
+              details: { documentId: file.id, title: params.title, localPath },
             };
           }
 
@@ -1860,16 +1868,35 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
                 isError: true,
               };
             }
+            
+            // Create spreadsheet locally using xlsx library
+            const sheetGen = createSpreadsheet({ title: params.title });
+            
+            // Add initial data if provided
+            if (params.data) {
+              sheetGen.setRange('Sheet1', 'A1', params.data);
+            }
+            
+            // Generate local file
+            const localPath = `./output/${params.title}.xlsx`;
+            sheetGen.generate(localPath);
+            
+            // Upload to Google Drive
             const folderId = extractFolderId(config.targetFolderId);
-            const sheet = await sheetsClient.createSpreadsheet(params.title, folderId);
+            const file = await driveClient.uploadFile(
+              localPath,
+              'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+              folderId
+            );
+            
             return {
               content: [
                 {
                   type: "text",
-                  text: `Created spreadsheet: ${sheet.spreadsheetId}\nTitle: ${sheet.properties?.title}`,
+                  text: `Created spreadsheet: ${file.id}\nTitle: ${params.title}\nLocal file: ${localPath}\nGoogle Drive: https://docs.google.com/spreadsheets/d/${file.id}/edit`,
                 },
               ],
-              details: { spreadsheetId: sheet.spreadsheetId },
+              details: { spreadsheetId: file.id, title: params.title, localPath },
             };
           }
 
@@ -2360,58 +2387,74 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
-        const { exportClient } = getClients(ctx.cwd);
-
-        switch (params.operation) {
-          case "export_document": {
-            const path = await exportClient.exportDocument(
-              params.fileId,
-              params.format as "pdf" | "docx" | "txt" | "html",
-              params.outputPath
-            );
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Exported document to: ${path}`,
-                },
-              ],
-              details: { path },
-            };
-          }
-
-          case "export_spreadsheet": {
-            const path = await exportClient.exportSpreadsheet(
-              params.fileId,
-              params.format as "pdf" | "xlsx" | "csv" | "tsv",
-              params.sheetId,
-              params.outputPath
-            );
-            return {
-              content: [
-                {
-                  type: "text",
-                  text: `Exported spreadsheet to: ${path}`,
-                },
-              ],
-              details: { path },
-            };
-          }
-
-          default:
-            return {
-              content: [
-                { type: "text", text: `Unknown operation: ${params.operation}` },
-              ],
-              isError: true,
-            };
+        const { driveClient: dc, config } = getClients(ctx.cwd);
+        const folderId = extractFolderId(config.targetFolderId);
+        
+        // Download the file from Google Drive first
+        const localPath = `./output/export_${params.fileId}_${Date.now()}`;
+        const downloadedPath = await dc.downloadFile(params.fileId, localPath);
+        
+        // Use LibreOffice for conversion
+        const converter = new PDFConverter();
+        
+        // Check if LibreOffice is installed
+        const isInstalled = await converter.isInstalled();
+        if (!isInstalled) {
+          return {
+            content: [{ type: "text", text: "Error: LibreOffice is not installed. Please install it to use export functionality." }],
+            isError: true,
+          };
         }
+        
+        // Convert the file
+        const result = await converter.convert(downloadedPath, {
+          format: params.format as any,
+          outputPath: params.outputPath,
+        });
+        
+        if (!result.success) {
+          return {
+            content: [{ type: "text", text: `Export failed: ${result.error}` }],
+            isError: true,
+          };
+        }
+        
+        // Upload the converted file back to Google Drive
+        const convertedFile = await dc.uploadFile(
+          result.outputPath,
+          this.getMimeType(params.format),
+          folderId
+        );
+        
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Exported file: ${result.outputPath}\nGoogle Drive: https://drive.google.com/file/d/${convertedFile.id}/view`,
+            },
+          ],
+          details: { localPath: result.outputPath, fileId: convertedFile.id },
+        };
       } catch (error: any) {
         return {
           content: [{ type: "text", text: `Error: ${error.message}` }],
           isError: true,
         };
       }
+    },
+    
+    // Helper method to get MIME type
+    private getMimeType(format: string): string {
+      const mimeTypes: Record<string, string> = {
+        pdf: 'application/pdf',
+        docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        csv: 'text/csv',
+        tsv: 'text/tab-separated-values',
+        txt: 'text/plain',
+        html: 'text/html',
+      };
+      return mimeTypes[format] || 'application/octet-stream';
     },
   });
 
