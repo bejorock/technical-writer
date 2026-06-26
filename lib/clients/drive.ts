@@ -276,4 +276,39 @@ export class DriveClient {
 
     return Buffer.from(response.data as ArrayBuffer);
   }
+
+  /**
+   * Upload a file with content
+   */
+  async uploadFile(
+    filePath: string,
+    mimeType: string,
+    folderId?: string
+  ): Promise<DriveFile> {
+    const client = await this.getClient();
+    const { readFileSync } = await import('node:fs');
+    const { basename } = await import('node:path');
+
+    const targetFolderId = folderId || this.config.targetFolderId;
+    const fileName = basename(filePath);
+    const fileContent = readFileSync(filePath);
+
+    const response = await client.files.create(
+      {
+        requestBody: {
+          name: fileName,
+          mimeType,
+          parents: targetFolderId ? [targetFolderId] : undefined,
+        },
+        media: {
+          mimeType,
+          body: new (await import('node:stream')).Readable.from(fileContent),
+        },
+        supportsAllDrives: true,
+        fields: "id, name, mimeType, createdTime",
+      }
+    );
+
+    return response.data as DriveFile;
+  }
 }

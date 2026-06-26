@@ -472,8 +472,7 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
             
             // Upload to Google Drive
             const folderId = extractFolderId(config.targetFolderId);
-            const { driveClient: dc } = getClients(ctx.cwd);
-            const file = await dc.uploadFile(
+            const file = await driveClient.uploadFile(
               localPath,
               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
               folderId
@@ -517,8 +516,7 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
             
             // Upload to Google Drive
             const folderId = extractFolderId(config.targetFolderId);
-            const { driveClient: dc } = getClients(ctx.cwd);
-            const file = await dc.uploadFile(
+            const file = await driveClient.uploadFile(
               localPath,
               'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
               folderId
