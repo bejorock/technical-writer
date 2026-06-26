@@ -834,7 +834,7 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
     promptGuidelines: [
       "ALWAYS use google_drive when the user asks to work with Google Drive files, folders, or cloud storage.",
       "Supports operations: list, create_folder, delete, move, copy, rename.",
-    ]
+    ],
     parameters: Type.Object({
       operation: Type.Union(
         [
