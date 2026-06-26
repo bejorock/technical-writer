@@ -1,247 +1,285 @@
-# Technical Writer - Google Docs/Sheets Extension
+# Technical Writer - Google Docs/Sheets Pi Extension
 
-A pi agent extension for Google Docs and Sheets integration.
+A pi agent extension for Google Docs and Sheets integration using service account authentication.
 
 ## Features
 
-### Google Docs
-- Create, read, update, delete documents
-- Insert, append, find/replace text
-- Apply formatting (bold, italic, underline, strikethrough, font, color)
-- Insert tables, paragraphs, page breaks, horizontal rules
-- Export to PDF, DOCX, TXT, HTML
-
-### Google Sheets
-- Create, read, update, delete spreadsheets
-- Read/write cell ranges, append rows
-- Format cells (colors, fonts, alignment)
-- Add/delete sheet tabs
-- Export to PDF, XLSX, CSV, TSV
-
-### Google Drive
-- List files with pagination
-- Create folders, move/copy/delete files
-- Search files by name or type
-
-### Configuration
-- `/google-config set key-path <path>` - Set service account key file
-- `/google-config set folder-id <id>` - Set target Drive folder
-- `/google-config show` - View current configuration
-- `/google-config test` - Test authentication
+- 📄 **Google Docs** - Create, read, update, format documents
+- 📊 **Google Sheets** - Create, read, write, format spreadsheets
+- 📁 **Google Drive** - Manage files and folders
+- 📥 **Export** - Download as PDF, DOCX, XLSX, CSV, TSV
+- 🖼️ **Image Tools** - Convert PDF to images, crop images
+- 🔐 **Service Account Auth** - Secure authentication via GCP
 
 ## Installation
 
-### As a Pi Package
+### From GitHub (Recommended)
 
 ```bash
-pi install /path/to/technical-writer
-# or
 pi install git:github.com/yourusername/technical-writer
 ```
 
-### Development
+### From Local Folder
 
 ```bash
-# Clone the repository
-git clone <repo-url>
-cd technical-writer
-
-# Install dependencies
-npm install
-
-# Test authentication
-npx tsx test-auth.ts
+pi install /path/to/technical-writer
 ```
+
+### For Current Project Only
+
+```bash
+pi install git:github.com/yourusername/technical-writer -l
+```
+
+## Prerequisites
+
+1. **Google Cloud Project** with these APIs enabled:
+   - Google Docs API
+   - Google Sheets API
+   - Google Drive API
+
+2. **Service Account** with Editor role
+
+3. **Shared Drive** folder shared with the service account
 
 ## Configuration
 
-### 1. Set Service Account Key
+### Step 1: Set Service Account Key Path
 
 ```bash
 /google-config set key-path /path/to/your-service-account.json
 ```
 
-### 2. Set Target Folder
-
+Or with URL:
 ```bash
-/google-config set folder-id 1fZNsAaWw1yXPWwB2o8H-TYcb5xHL-QBi
+/google-config set key-path https://drive.google.com/file/d/.../view
 ```
 
-### 3. Test Connection
+### Step 2: Set Target Folder ID
+
+```bash
+/google-config set folder-id YOUR_FOLDER_ID
+```
+
+Or with URL:
+```bash
+/google-config set folder-id https://drive.google.com/drive/folders/FOLDER_ID
+```
+
+### Step 3: Test Configuration
 
 ```bash
 /google-config test
 ```
 
-## Usage
+### View Current Config
 
-### Tools
-
-#### `google_docs`
-Create, read, update, and manage Google Docs documents.
-
-```typescript
-// Create a document
-google_docs({ operation: "create", title: "My Document" })
-
-// Read a document
-google_docs({ operation: "get", documentId: "doc-id" })
-
-// Insert text
-google_docs({ 
-  operation: "insert_text", 
-  documentId: "doc-id", 
-  text: "Hello World", 
-  index: 0 
-})
-
-// Format text
-google_docs({ 
-  operation: "format_text", 
-  documentId: "doc-id", 
-  startIndex: 0, 
-  endIndex: 5,
-  formatOptions: { bold: true, italic: true }
-})
+```bash
+/google-config show
 ```
 
-#### `google_sheets`
-Create, read, update, and manage Google Sheets spreadsheets.
+## Configuration File
 
-```typescript
-// Create a spreadsheet
-google_sheets({ operation: "create", title: "My Spreadsheet" })
+Settings are stored in `.pi/google-docs/config.json`:
 
-// Read a range
-google_sheets({ 
-  operation: "read_range", 
-  spreadsheetId: "sheet-id", 
-  range: "A1:B10" 
-})
-
-// Write values
-google_sheets({ 
-  operation: "write_range", 
-  spreadsheetId: "sheet-id", 
-  range: "A1:B2", 
-  values: [["Name", "Age"], ["Alice", 30]] 
-})
-
-// Format cells
-google_sheets({ 
-  operation: "format_cells", 
-  spreadsheetId: "sheet-id", 
-  range: "A1:B1",
-  formatOptions: { bold: true, backgroundColor: "#FFFF00" }
-})
+```json
+{
+  "serviceAccountKeyPath": "./service-account.json",
+  "targetFolderId": "0AHAPdW0qB70bUk9PVA",
+  "useSharedDrive": true
+}
 ```
 
-#### `google_drive`
+## Available Tools
+
+### 1. google_docs
+
+Create and manage Google Docs documents.
+
+| Operation | Parameters | Description |
+|-----------|------------|-------------|
+| `create` | `title` | Create new document |
+| `get` | `documentId` | Get document content |
+| `list` | - | List all documents |
+| `delete` | `documentId` | Delete a document |
+| `rename` | `documentId`, `title` | Rename a document |
+| `insert_text` | `documentId`, `text`, `index` | Insert text at position |
+| `append_text` | `documentId`, `text` | Append text to end |
+| `find_replace` | `documentId`, `findText`, `replaceText` | Find and replace |
+| `format_text` | `documentId`, `startIndex`, `endIndex`, `formatOptions` | Apply formatting |
+| `insert_table` | `documentId`, `rows`, `columns`, `index` | Insert a table |
+
+**Example:**
+```bash
+pi -e ./extensions/index.ts -p "Create a Google Doc called 'Meeting Notes' with a title and bullet points"
+```
+
+### 2. google_sheets
+
+Create and manage Google Sheets spreadsheets.
+
+| Operation | Parameters | Description |
+|-----------|------------|-------------|
+| `create` | `title` | Create new spreadsheet |
+| `get` | `spreadsheetId` | Get spreadsheet metadata |
+| `list` | - | List all spreadsheets |
+| `delete` | `spreadsheetId` | Delete a spreadsheet |
+| `read_range` | `spreadsheetId`, `range` | Read cell values |
+| `write_range` | `spreadsheetId`, `range`, `values` | Write values to range |
+| `append_rows` | `spreadsheetId`, `range`, `values` | Append rows |
+| `format_cells` | `spreadsheetId`, `range`, `formatOptions` | Format cells |
+
+**Example:**
+```bash
+pi -e ./extensions/index.ts -p "Create a spreadsheet with sales data: Product, Quantity, Price"
+```
+
+### 3. google_drive
+
 Manage Google Drive files and folders.
 
-```typescript
-// List files
-google_drive({ operation: "list" })
+| Operation | Parameters | Description |
+|-----------|------------|-------------|
+| `list` | `pageToken`, `pageSize` | List files |
+| `create_folder` | `name`, `targetFolderId` | Create a folder |
+| `delete` | `fileId` | Delete a file |
+| `move` | `fileId`, `targetFolderId` | Move a file |
+| `copy` | `fileId`, `name`, `targetFolderId` | Copy a file |
+| `rename` | `fileId`, `name` | Rename a file |
 
-// List with pagination
-google_drive({ operation: "list", pageSize: 50, pageToken: "token" })
-
-// Create a folder
-google_drive({ operation: "create_folder", name: "My Folder" })
-
-// Move a file
-google_drive({ 
-  operation: "move", 
-  fileId: "file-id", 
-  targetFolderId: "folder-id" 
-})
+**Example:**
+```bash
+pi -e ./extensions/index.ts -p "List all files in my Google Drive folder"
 ```
 
-#### `google_export`
+### 4. google_export
+
 Export Google Docs and Sheets to various formats.
 
-```typescript
-// Export document to PDF
-google_export({ 
-  operation: "export_document", 
-  fileId: "doc-id", 
-  format: "pdf" 
-})
+| Operation | Parameters | Description |
+|-----------|------------|-------------|
+| `export_document` | `fileId`, `format` | Export document |
+| `export_spreadsheet` | `fileId`, `format` | Export spreadsheet |
 
-// Export spreadsheet to CSV
-google_export({ 
-  operation: "export_spreadsheet", 
-  fileId: "sheet-id", 
-  format: "csv",
-  sheetId: 0
-})
+**Supported Formats:**
+- Documents: `pdf`, `docx`, `txt`, `html`
+- Spreadsheets: `pdf`, `xlsx`, `csv`, `tsv`
+
+**Example:**
+```bash
+pi -e ./extensions/index.ts -p "Export the Meeting Notes document to PDF"
 ```
 
-### Commands
+### 5. image_tool
 
-| Command | Description |
-|---------|-------------|
-| `/google-config set key-path <path>` | Set service account key file path |
-| `/google-config set folder-id <id>` | Set target Drive folder ID |
-| `/google-config show` | Display current configuration |
-| `/google-config test` | Test authentication |
+Convert PDF to images and crop images.
 
-## Project Structure
+| Operation | Parameters | Description |
+|-----------|------------|-------------|
+| `pdf_to_images` | `pdfPath`, `outputPath`, `pages`, `format` | Convert PDF to images |
+| `crop` | `imagePath`, `cropX`, `cropY`, `cropWidth`, `cropHeight` | Crop an image |
 
+**Example:**
+```bash
+pi -e ./extensions/index.ts -p "Export the document to PDF and convert it to PNG images"
 ```
-technical-writer/
-├── extensions/
-│   ├── index.ts              # Main extension entry point
-│   └── config.ts             # Configuration management
-├── lib/
-│   ├── clients/
-│   │   ├── auth.ts           # Google API authentication
-│   │   ├── docs.ts           # Google Docs client
-│   │   ├── sheets.ts         # Google Sheets client
-│   │   └── drive.ts          # Google Drive client
-│   └── export/
-│       └── index.ts          # Export functionality
-├── skills/                   # Agent skills
-├── prompts/                  # Prompt templates
-├── package.json              # Pi package manifest
-├── tsconfig.json             # TypeScript config
-└── README.md                 # This file
+
+## URL Support
+
+You can use URLs instead of IDs for all tools:
+
+```bash
+# Folder URL
+/google-config set folder-id https://drive.google.com/drive/folders/FOLDER_ID
+
+# File ID or URL works for all operations
+google_docs({ operation: "get", documentId: "https://docs.google.com/document/d/DOC_ID/edit" })
+```
+
+## Supported URL Formats
+
+| Type | Format |
+|------|--------|
+| Folder | `https://drive.google.com/drive/folders/FOLDER_ID` |
+| Folder with user | `https://drive.google.com/drive/u/1/folders/FOLDER_ID` |
+| Document | `https://docs.google.com/document/d/DOC_ID/edit` |
+| Spreadsheet | `https://docs.google.com/spreadsheets/d/SHEET_ID/edit` |
+
+## Workflow Examples
+
+### Create and Fill a Document
+
+```bash
+pi -e ./extensions/index.ts -p "Create a project proposal document with sections: Introduction, Goals, Timeline, Budget"
+```
+
+### Create and Format a Spreadsheet
+
+```bash
+pi -e ./extensions/index.ts -p "Create an expense tracker with columns: Date, Description, Amount, Category. Add 5 sample rows."
+```
+
+### Export and Convert
+
+```bash
+pi -e ./extensions/index.ts -p "Export the expense tracker to CSV and the proposal to PDF"
+```
+
+### List and Organize
+
+```bash
+pi -e ./extensions/index.ts -p "List all my documents and create a folder called 'Archive' for older files"
+```
+
+## Troubleshooting
+
+### "Permission denied" Error
+
+- Ensure the service account has **Editor** role on the Shared Drive
+- Check that the folder is shared with the service account email
+
+### "Storage quota exceeded" Error
+
+- Service accounts require **Shared Drives**, not personal drives
+- Use the Shared Drive folder ID, not a personal folder
+
+### "Configuration not found" Error
+
+- Run `/google-config set key-path <path>` and `/google-config set folder-id <id>`
+
+### Test Authentication
+
+```bash
+/google-config test
 ```
 
 ## Development
 
-### Adding New Operations
-
-1. Add the operation to the appropriate client file (docs.ts, sheets.ts, drive.ts)
-2. Update the tool in extensions/index.ts with the new operation
-3. Add TypeBox schema for the operation parameters
-4. Add prompt guidelines for the new operation
-
-### Testing
+### Run Tests
 
 ```bash
-# Test authentication
-npx tsx test-auth.ts
-
-# Test in pi
-pi -e ./extensions/index.ts
+npm test
 ```
 
-## Known Limitations
+### Build
 
-- Service account has limited storage quota
-- Some operations require specific Google API permissions
-- Snapshot features (page as image) not yet implemented
-- Row/column reordering not yet implemented
+```bash
+npm run build
+```
 
-## Resources
+## Requirements
 
-- [Pi Documentation](https://pi.dev)
-- [Extension Guide](https://pi.dev/docs/extensions)
-- [Google Docs API](https://developers.google.com/docs/api)
-- [Google Sheets API](https://developers.google.com/sheets/api)
-- [Google Drive API](https://developers.google.com/drive/api)
+- Node.js 18+
+- pi installed globally
+- Google Cloud project with APIs enabled
+- Service account with Editor role
+- Shared Drive folder
 
 ## License
 
 MIT
+
+## Support
+
+- [Pi Documentation](https://pi.dev)
+- [GitHub Issues](https://github.com/yourusername/technical-writer/issues)
