@@ -134,7 +134,10 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
           Type.Literal("rename"),
           Type.Literal("insert_text"),
           Type.Literal("append_text"),
+          Type.Literal("delete_range"),
           Type.Literal("find_replace"),
+          Type.Literal("replace_section"),
+          Type.Literal("update_table_cell"),
           Type.Literal("format_text"),
           Type.Literal("insert_table"),
           Type.Literal("insert_paragraph"),
@@ -158,6 +161,24 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
       ),
       replaceText: Type.Optional(
         Type.String({ description: "Replacement text (for find_replace)" })
+      ),
+      sectionHeading: Type.Optional(
+        Type.String({ description: "Section heading text (for replace_section)" })
+      ),
+      newContent: Type.Optional(
+        Type.String({ description: "New content for section (for replace_section)" })
+      ),
+      tableIndex: Type.Optional(
+        Type.Number({ description: "Table index (for update_table_cell, 0-based)" })
+      ),
+      row: Type.Optional(
+        Type.Number({ description: "Row index (for update_table_cell, 0-based)" })
+      ),
+      column: Type.Optional(
+        Type.Number({ description: "Column index (for update_table_cell, 0-based)" })
+      ),
+      cellText: Type.Optional(
+        Type.String({ description: "New cell text (for update_table_cell)" })
       ),
       startIndex: Type.Optional(
         Type.Number({ description: "Start index for range operations" })
@@ -494,6 +515,165 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
                 },
               ],
               details: result,
+            };
+          }
+
+          case "delete_range": {
+            if (!params.documentId || params.startIndex === undefined || params.endIndex === undefined) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: "Error: documentId, startIndex, and endIndex are required",
+                  },
+                ],
+                isError: true,
+              };
+            }
+            const deleteId = extractFileId(params.documentId);
+            await docsClient.deleteRange(deleteId, params.startIndex, params.endIndex);
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Deleted content from index ${params.startIndex} to ${params.endIndex}`,
+                },
+              ],
+            };
+          }
+
+          case "replace_section": {
+            if (!params.documentId || !params.sectionHeading || params.newContent === undefined) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: "Error: documentId, sectionHeading, and newContent are required",
+                  },
+                ],
+                isError: true,
+              };
+            }
+            const replaceId = extractFileId(params.documentId);
+            // Find the section heading
+            const docData = await docsClient.getDocument(replaceId);
+            const content = docData.body?.content || [];
+            
+            // Find the heading paragraph
+            let headingStart = -1;
+            let headingEnd = -1;
+            let nextSectionStart = -1;
+            
+            for (let i = 0; i < content.length; i++) {
+              const element = content[i];
+              if (element.paragraph) {
+                const text = element.paragraph.elements?.map(el => el.textRun?.content || '').join('') || '';
+                const style = element.paragraph.paragraphStyle?.namedStyleType || '';
+                
+                // Check if this is the heading we're looking for
+                if (text.trim().includes(params.sectionHeading!) && style.startsWith('HEADING')) {
+                  headingStart = element.startIndex!;
+                  headingEnd = element.endIndex!;
+                }
+                // Check if we found the next section (heading after our target)
+                else if (headingStart > 0 && style.startsWith('HEADING') && element.startIndex! > headingEnd) {
+                  nextSectionStart = element.startIndex!;
+                  break;
+                }
+              }
+            }
+            
+            if (headingStart === -1) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Section heading "${params.sectionHeading}" not found`,
+                  },
+                ],
+                isError: true,
+              };
+            }
+            
+            // Delete from end of heading to start of next section (or end of doc)
+            const deleteStart = headingEnd;
+            const deleteEnd = nextSectionStart > 0 ? nextSectionStart : (content[content.length - 1]?.endIndex || 1);
+            
+            if (deleteEnd > deleteStart) {
+              await docsClient.deleteRange(replaceId, deleteStart, deleteEnd);
+            }
+            
+            // Insert new content at the same position
+            await docsClient.insertText(replaceId, params.newContent + '\n', deleteStart);
+            
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Replaced section "${params.sectionHeading}" with new content`,
+                },
+              ],
+            };
+          }
+
+          case "update_table_cell": {
+            if (!params.documentId || params.tableIndex === undefined || params.row === undefined || params.column === undefined || params.cellText === undefined) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: "Error: documentId, tableIndex, row, column, and cellText are required",
+                  },
+                ],
+                isError: true,
+              };
+            }
+            const tableId = extractFileId(params.documentId);
+            const tableDocData = await docsClient.getDocument(tableId);
+            const tables = tableDocData.body?.content?.filter(el => el.table) || [];
+            
+            if (params.tableIndex >= tables.length) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Table index ${params.tableIndex} not found. Document has ${tables.length} table(s).`,
+                  },
+                ],
+                isError: true,
+              };
+            }
+            
+            const targetTable = tables[params.tableIndex].table;
+            if (!targetTable?.tableRows?.[params.row]?.tableCells?.[params.column]) {
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Cell [${params.row}][${params.column}] not found in table`,
+                  },
+                ],
+                isError: true,
+              };
+            }
+            
+            const cell = targetTable.tableRows[params.row].tableCells[params.column];
+            const cellStartIndex = cell.content?.[0]?.startIndex || cell.startIndex + 1;
+            const cellEndIndex = cell.content?.[0]?.endIndex || cell.endIndex;
+            
+            // Delete existing content and insert new
+            if (cellEndIndex > cellStartIndex) {
+              await docsClient.deleteRange(tableId, cellStartIndex, cellEndIndex);
+            }
+            await docsClient.insertText(tableId, params.cellText, cellStartIndex);
+            
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Updated cell [${params.row}][${params.column}] in table ${params.tableIndex}`,
+                },
+              ],
             };
           }
 
