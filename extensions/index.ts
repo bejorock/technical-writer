@@ -74,6 +74,32 @@ export default function (pi: ExtensionAPI) {
     }
   });
 
+  // Add system prompt to guide tool usage
+  pi.on("before_agent_start", async (event, ctx) => {
+    const config = loadConfig(ctx.cwd);
+    if (!config) return;
+
+    // Add instructions to system prompt
+    return {
+      systemPrompt: event.systemPrompt + `
+
+## Google Workspace Integration
+
+This project has Google Docs/Sheets integration via the Technical Writer extension.
+
+**IMPORTANT RULES:**
+- When the user asks to create a document, ALWAYS use the google_docs tool with operation "create"
+- When the user asks to create a spreadsheet, ALWAYS use the google_sheets tool with operation "create"
+- When the user asks to edit a document, use google_docs tool
+- When the user asks to edit a spreadsheet, use google_sheets tool
+- NEVER use the built-in write tool to create .docx, .xlsx, or similar files
+- The extension creates files directly in Google Drive (cloud), not locally
+
+Available tools: google_docs, google_sheets, google_drive, google_export, image_tool
+`,
+    };
+  });
+
   // Clean up on shutdown
   pi.on("session_shutdown", async (_event, _ctx) => {
     docsClient = null;
@@ -93,7 +119,8 @@ export default function (pi: ExtensionAPI) {
     promptSnippet:
       "Create, read, update, and manage Google Docs documents",
     promptGuidelines: [
-      "Use google_docs when the user asks to work with Google Docs documents.",
+      "ALWAYS use google_docs when the user asks to create, edit, or manage ANY document (Google Doc, docx, or similar).",
+      "NEVER use the built-in write tool for documents - always use google_docs instead.",
       "Supports operations: create, get, list, delete, rename, insert_text, append_text, find_replace, format_text, insert_table, insert_paragraph.",
     ],
     parameters: Type.Object({
@@ -462,7 +489,8 @@ export default function (pi: ExtensionAPI) {
     promptSnippet:
       "Create, read, update, and manage Google Sheets spreadsheets",
     promptGuidelines: [
-      "Use google_sheets when the user asks to work with Google Sheets spreadsheets.",
+      "ALWAYS use google_sheets when the user asks to create, edit, or manage ANY spreadsheet (Google Sheet, xlsx, csv, or similar).",
+      "NEVER use the built-in write tool for spreadsheets - always use google_sheets instead.",
       "Supports operations: create, get, list, delete, read_range, write_range, append_rows, format_cells, add_sheet, delete_sheet.",
     ],
     parameters: Type.Object({
@@ -804,9 +832,9 @@ export default function (pi: ExtensionAPI) {
     description: "Manage Google Drive files and folders",
     promptSnippet: "Manage Google Drive files and folders",
     promptGuidelines: [
-      "Use google_drive when the user asks to work with Google Drive files and folders.",
+      "ALWAYS use google_drive when the user asks to work with Google Drive files, folders, or cloud storage.",
       "Supports operations: list, create_folder, delete, move, copy, rename.",
-    ],
+    ]
     parameters: Type.Object({
       operation: Type.Union(
         [
