@@ -376,8 +376,21 @@ export class DocsClient {
       };
     }
 
+    // Map format keys to API field names
+    const fieldMap: Record<string, string> = {
+      bold: 'bold',
+      italic: 'italic',
+      underline: 'underline',
+      strikethrough: 'strikethrough',
+      fontFamily: 'weightedFontFamily',
+      fontSize: 'fontSize',
+      foregroundColor: 'foregroundColor',
+      backgroundColor: 'backgroundColor',
+    };
+
     const fields = Object.keys(format)
       .filter((k) => format[k as keyof typeof format] !== undefined)
+      .map((k) => fieldMap[k] || k)
       .join(",");
 
     await client.documents.batchUpdate({
@@ -421,7 +434,7 @@ export class DocsClient {
                 endIndex,
               },
               paragraphStyle: {
-                alignment: alignment as any,
+                alignment: (alignment === 'LEFT' ? 'START' : alignment === 'RIGHT' ? 'END' : alignment === 'JUSTIFY' ? 'JUSTIFIED' : alignment) as any,
               },
               fields: "alignment",
             },
@@ -475,6 +488,8 @@ export class DocsClient {
   ): Promise<void> {
     const client = await this.getClient();
 
+    // Line spacing is a Float, not an object with magnitude/unit
+    // 100.0 = single spacing, 150.0 = 1.5 spacing, 200.0 = double spacing
     await client.documents.batchUpdate({
       documentId,
       requestBody: {
@@ -486,10 +501,7 @@ export class DocsClient {
                 endIndex,
               },
               paragraphStyle: {
-                lineSpacing: {
-                  magnitude: spacing,
-                  unit: 'PERCENT',
-                },
+                lineSpacing: spacing,
               },
               fields: 'lineSpacing',
             },
