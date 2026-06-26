@@ -181,6 +181,9 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
           Type.Literal("insert_rich_link"),
           Type.Literal("insert_person"),
           Type.Literal("insert_date"),
+          Type.Literal("insert_checklist"),
+          Type.Literal("insert_checklist_items"),
+          Type.Literal("create_bookmark"),
         ],
         { description: "Operation to perform" }
       ),
@@ -219,6 +222,21 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
       ),
       cellText: Type.Optional(
         Type.String({ description: "New cell text (for update_table_cell)" })
+      ),
+      checked: Type.Optional(
+        Type.Boolean({ description: "Checkbox state (for insert_checklist)" })
+      ),
+      items: Type.Optional(
+        Type.Array(
+          Type.Object({
+            text: Type.String({ description: "Item text" }),
+            checked: Type.Optional(Type.Boolean({ description: "Checked state" })),
+          }),
+          { description: "Checklist items (for insert_checklist_items)" }
+        )
+      ),
+      name: Type.Optional(
+        Type.String({ description: "Bookmark name (for create_bookmark)" })
       ),
       startIndex: Type.Optional(
         Type.Number({ description: "Start index for range operations" })
@@ -1693,6 +1711,49 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
             await docsClient.insertDate(dateId, params.index, params.locale, params.timeZone);
             return {
               content: [{ type: "text", text: `Inserted date at index ${params.index}` }],
+            };
+          }
+
+          case "insert_checklist": {
+            if (!params.documentId || !params.text) {
+              return {
+                content: [{ type: "text", text: "Error: documentId and text are required" }],
+                isError: true,
+              };
+            }
+            const checkId = extractFileId(params.documentId);
+            await docsClient.insertChecklist(checkId, params.text, params.checked || false, params.index);
+            return {
+              content: [{ type: "text", text: `Inserted checklist item: ${params.text}` }],
+            };
+          }
+
+          case "insert_checklist_items": {
+            if (!params.documentId || !params.items) {
+              return {
+                content: [{ type: "text", text: "Error: documentId and items array are required" }],
+                isError: true,
+              };
+            }
+            const checkListId = extractFileId(params.documentId);
+            await docsClient.insertChecklistItems(checkListId, params.items, params.index);
+            return {
+              content: [{ type: "text", text: `Inserted ${params.items.length} checklist items` }],
+            };
+          }
+
+          case "create_bookmark": {
+            if (!params.documentId || !params.name || params.startIndex === undefined || params.endIndex === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, name, startIndex, and endIndex are required" }],
+                isError: true,
+              };
+            }
+            const bookmarkId = extractFileId(params.documentId);
+            const bookmarkIdResult = await docsClient.createBookmark(bookmarkId, params.name, params.startIndex, params.endIndex);
+            return {
+              content: [{ type: "text", text: `Created bookmark '${params.name}' with ID: ${bookmarkIdResult}` }],
+              details: { bookmarkId: bookmarkIdResult },
             };
           }
 
