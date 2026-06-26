@@ -122,7 +122,7 @@ export class DocsClient {
 
   /**
    * Insert text at a specific position
-   * For empty documents, use appendText instead
+   * For empty documents or index 0, use appendText instead
    */
   async insertText(
     documentId: string,
@@ -131,18 +131,10 @@ export class DocsClient {
   ): Promise<void> {
     const client = await this.getClient();
 
-    // For index 0, check if document is empty and use append instead
+    // For index 0, always use appendText to avoid empty document issues
     if (index === 0) {
-      try {
-        const endIndex = await this.getEndIndex(documentId);
-        if (endIndex <= 1) {
-          // Document is empty, use append
-          await this.appendText(documentId, text);
-          return;
-        }
-      } catch (e) {
-        // Continue with insert attempt
-      }
+      await this.appendText(documentId, text);
+      return;
     }
 
     await client.documents.batchUpdate({
