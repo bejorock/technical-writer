@@ -86,6 +86,7 @@ Read the skill files for detailed instructions:
 - skills/docx-creation/SKILL.md - How to create DOCX files using the docx library
 - skills/xlsx-creation/SKILL.md - How to create XLSX files using the xlsx library
 - skills/pdf-conversion/SKILL.md - How to convert documents to PDF using LibreOffice
+- skills/pdf-to-images/SKILL.md - How to convert PDF pages to images and crop images
 
 **Option 2: Write code directly**
 You can also write TypeScript/JavaScript code using:
