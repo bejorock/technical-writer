@@ -126,6 +126,7 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
     parameters: Type.Object({
       operation: Type.Union(
         [
+          Type.Literal("create_document"),
           Type.Literal("create"),
           Type.Literal("get"),
           Type.Literal("list"),
@@ -185,6 +186,28 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
           { description: "Named style (heading, title, etc.)" }
         )
       ),
+      content: Type.Optional(
+        Type.Array(
+          Type.Object({
+            type: Type.Union([
+              Type.Literal("heading"),
+              Type.Literal("paragraph"),
+              Type.Literal("list_item"),
+              Type.Literal("table"),
+              Type.Literal("page_break"),
+            ]),
+            text: Type.Optional(Type.String({ description: "Text content" })),
+            style: Type.Optional(Type.String({ description: "Style: TITLE, SUBTITLE, HEADING_1-9, NORMAL_TEXT" })),
+            alignment: Type.Optional(Type.String({ description: "Alignment: LEFT, CENTER, RIGHT, JUSTIFY" })),
+            bold: Type.Optional(Type.Boolean({ description: "Bold formatting" })),
+            italic: Type.Optional(Type.Boolean({ description: "Italic formatting" })),
+            rows: Type.Optional(Type.Number({ description: "Table rows (for table type)" })),
+            columns: Type.Optional(Type.Number({ description: "Table columns (for table type)" })),
+            tableData: Type.Optional(Type.Array(Type.Array(Type.String()), { description: "Table data (for table type)" })),
+          }),
+          { description: "Document content structure (for create_document operation)" }
+        )
+      ),
       formatOptions: Type.Optional(
         Type.Object({
           bold: Type.Optional(Type.Boolean({ description: "Apply bold formatting" })),
@@ -203,6 +226,101 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
         const { docsClient, driveClient, config } = getClients(ctx.cwd);
 
         switch (params.operation) {
+          case "create_document": {
+            if (!params.title || !params.content) {
+              return {
+                content: [{ type: "text", text: "Error: title and content array are required" }],
+                isError: true,
+              };
+            }
+            const folderId = extractFolderId(config.targetFolderId);
+            const doc = await docsClient.createDocument(params.title, folderId);
+            
+            // Process all content elements
+            for (const item of params.content) {
+              const endIndex = await docsClient.getEndIndex(doc.documentId);
+              
+              switch (item.type) {
+                case "heading":
+                case "paragraph": {
+                  // Get end index before inserting
+                  const preInsertIndex = await docsClient.getEndIndex(doc.documentId);
+                  await docsClient.appendText(doc.documentId, (item.text || '') + '\n');
+                  // Get the paragraph we just inserted
+                  const docData = await docsClient.getDocument(doc.documentId);
+                  const content = docData.body?.content || [];
+                  // Find the paragraph that starts at preInsertIndex
+                  const newParagraph = content.find(
+                    el => el.paragraph && el.startIndex === preInsertIndex
+                  );
+                  if (newParagraph) {
+                    if (item.style) {
+                      await docsClient.setNamedStyle(
+                        doc.documentId,
+                        newParagraph.startIndex!,
+                        newParagraph.endIndex!,
+                        item.style as any
+                      );
+                    }
+                    if (item.alignment) {
+                      await docsClient.setParagraphAlignment(
+                        doc.documentId,
+                        newParagraph.startIndex!,
+                        newParagraph.endIndex!,
+                        item.alignment as any
+                      );
+                    }
+                  }
+                  break;
+                }
+                
+                case "list_item":
+                  await docsClient.appendText(doc.documentId, '- ' + (item.text || '') + '\n');
+                  break;
+                
+                case "table":
+                  if (item.rows && item.columns && item.tableData) {
+                    await docsClient.insertTable(doc.documentId, item.rows, item.columns, endIndex);
+                    // Fill table data
+                    const docData = await docsClient.getDocument(doc.documentId);
+                    const tables = docData.body?.content?.filter(el => el.table) || [];
+                    const lastTable = tables[tables.length - 1];
+                    if (lastTable?.table?.tableRows) {
+                      // Fill in reverse order to avoid index shifting
+                      for (let r = lastTable.table.tableRows.length - 1; r >= 0; r--) {
+                        const row = lastTable.table.tableRows[r];
+                        if (row.tableCells) {
+                          for (let c = row.tableCells.length - 1; c >= 0; c--) {
+                            const cell = row.tableCells[c];
+                            const insertIndex = cell.content?.[0]?.startIndex || cell.startIndex + 1;
+                            const cellText = item.tableData[r]?.[c] || '';
+                            if (cellText) {
+                              await docsClient.insertText(doc.documentId, cellText, insertIndex);
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  break;
+                
+                case "page_break":
+                  await docsClient.insertPageBreak(doc.documentId, endIndex);
+                  break;
+              }
+            }
+            
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Created document: ${doc.documentId}\nTitle: ${doc.title}\nContent: ${params.content.length} elements added`,
+                },
+              ],
+              details: { documentId: doc.documentId, title: doc.title },
+            };
+          }
+
           case "create": {
             if (!params.title) {
               return {
