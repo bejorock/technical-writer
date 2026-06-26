@@ -134,9 +134,9 @@ export function registerConfigCommands(pi: ExtensionAPI) {
               return;
           }
 
-          const errors = validateConfig(config);
-          if (errors.length > 0) {
-            ctx.ui.notify(`Validation errors: ${errors.join(", ")}`, "error");
+          // Only validate the field being set
+          if (key === 'key-path' && !existsSync(config.serviceAccountKeyPath)) {
+            ctx.ui.notify(`File not found: ${config.serviceAccountKeyPath}`, "error");
             return;
           }
 
