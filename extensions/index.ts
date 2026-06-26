@@ -71,53 +71,30 @@ export default function (pi: ExtensionAPI) {
     return {
       systemPrompt: event.systemPrompt + `
 
-## Technical Writer Extension - Google Drive Integration
+## Technical Writer Extension
 
-This project has Google Drive integration via the Technical Writer extension.
+**IMPORTANT: When creating or reading documents, ALWAYS read the relevant skill file first.**
 
-**Available Tools:**
-- google_drive - Upload, download, delete, list files on Google Drive
+### Skills (read these for instructions)
+- **Create DOCX**: Read skills/docx-creation/SKILL.md
+- **Create XLSX**: Read skills/xlsx-creation/SKILL.md
+- **Convert to PDF**: Read skills/pdf-conversion/SKILL.md
+- **PDF to images / Read PDF**: Read skills/pdf-to-images/SKILL.md
 
-**Document & Spreadsheet Creation:**
-When the user asks to create documents (.docx) or spreadsheets (.xlsx), you have TWO options:
+### Tools
+- **google_drive**: Upload, download, delete, list files on Google Drive
 
-**Option 1: Use the skills (RECOMMENDED)**
-Read the skill files for detailed instructions:
-- skills/docx-creation/SKILL.md - How to create DOCX files using the docx library
-- skills/xlsx-creation/SKILL.md - How to create XLSX files using the xlsx library
-- skills/pdf-conversion/SKILL.md - How to convert documents to PDF using LibreOffice
-- skills/pdf-to-images/SKILL.md - How to convert PDF pages to images and crop images
+### Workflow
+1. Read the relevant skill file for instructions
+2. Write TypeScript code using the library (docx, xlsx, etc.)
+3. Run the script to generate the file locally
+4. Use google_drive tool to upload to Google Drive
 
-**Option 2: Write code directly**
-You can also write TypeScript/JavaScript code using:
-- \`docx\` library for DOCX files (already installed)
-- \`xlsx\` library for XLSX files (already installed)
-- LibreOffice CLI for PDF conversion
-
-**Workflow:**
-1. Create the document locally using docx/xlsx library (write a script)
-2. Run the script to generate the file
-3. Use google_drive tool to upload to Google Drive
-4. Return the Google Drive link to the user
-
-**Example:**
-\`\`\`typescript
-// 1. Create local file using docx library
-import { Document, Packer, Paragraph, TextRun } from 'docx';
-// ... create document ...
-
-// 2. Save locally
-const buffer = await Packer.toBuffer(doc);
-fs.writeFileSync('./output/my-doc.docx', buffer);
-
-// 3. Upload to Google Drive (use google_drive tool)
-// google_drive({ operation: "upload", localPath: "./output/my-doc.docx" })
-\`\`\`
-
-**IMPORTANT:**
-- NEVER use the built-in write tool for documents
-- ALWAYS create files locally first, then upload to Google Drive
-- The docx and xlsx libraries are installed and ready to use
+### Quick Reference
+- Creating documents? → Read skills/docx-creation/SKILL.md
+- Creating spreadsheets? → Read skills/xlsx-creation/SKILL.md
+- Converting to PDF? → Read skills/pdf-conversion/SKILL.md
+- Reading PDF or converting to images? → Read skills/pdf-to-images/SKILL.md
 `,
     };
   });
