@@ -16,7 +16,7 @@ A pi agent extension for Google Docs and Sheets integration using service accoun
 ### From GitHub (Recommended)
 
 ```bash
-pi install git:github.com/yourusername/technical-writer
+pi install git:github.com/bejorock/technical-writer
 ```
 
 ### From Local Folder
@@ -28,7 +28,7 @@ pi install /path/to/technical-writer
 ### For Current Project Only
 
 ```bash
-pi install git:github.com/yourusername/technical-writer -l
+pi install git:github.com/bejorock/technical-writer -l
 ```
 
 ## Prerequisites
@@ -282,4 +282,4 @@ MIT
 ## Support
 
 - [Pi Documentation](https://pi.dev)
-- [GitHub Issues](https://github.com/yourusername/technical-writer/issues)
+- [GitHub Issues](https://github.com/bejorock/technical-writer/issues)
