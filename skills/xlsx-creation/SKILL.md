@@ -1,3 +1,11 @@
+---
+name: xlsx-creation
+description: |
+  Create Excel spreadsheets (.xlsx) using the xlsx library (SheetJS) in TypeScript.
+  Supports cells, ranges, multiple sheets, formatting, merged cells, and more.
+  Use when the user asks to create or generate an XLSX file.
+---
+
 # XLSX Creation Skill
 
 ## Overview

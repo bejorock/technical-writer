@@ -1,3 +1,11 @@
+---
+name: pdf-to-images
+description: |
+  Convert PDF pages to PNG/JPEG images and crop image regions.
+  Uses pdf2pic, sharp, graphicsmagick, and ghostscript.
+  Use when the user asks to extract pages from a PDF or crop an image.
+---
+
 # PDF to Images Skill
 
 ## Overview

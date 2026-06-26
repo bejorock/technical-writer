@@ -1,3 +1,11 @@
+---
+name: docx-creation
+description: |
+  Create Word documents (.docx) using the docx library in TypeScript.
+  Supports paragraphs, tables, lists, formatting, page breaks, and more.
+  Use when the user asks to create or generate a DOCX file.
+---
+
 # DOCX Creation Skill
 
 ## Overview

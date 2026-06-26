@@ -1,3 +1,11 @@
+---
+name: pdf-conversion
+description: |
+  Convert documents to PDF using LibreOffice command-line.
+  Supports DOCX, XLSX, ODT, and other formats.
+  Use when the user asks to convert a document to PDF.
+---
+
 # PDF Conversion Skill
 
 ## Overview
