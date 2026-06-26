@@ -14,6 +14,19 @@ dist/
 !.pi/settings.json
 !.mcp.json
 
+# Service account keys - NEVER commit
+*-*.json
+*.key
+*.pem
+*.credentials
+.env
+.env.*
+
+# Config with credentials
+config.json
+config.local.json
+config.production.json
+
 # Test files
 test-*.ts
 test-*.pdf

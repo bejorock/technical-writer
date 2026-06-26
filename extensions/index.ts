@@ -520,7 +520,7 @@ export default function (pi: ExtensionAPI) {
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
       try {
-        const { sheetsClient, driveClient } = getClients(ctx.cwd);
+        const { sheetsClient, driveClient, config } = getClients(ctx.cwd);
 
         switch (params.operation) {
           case "create": {
@@ -530,7 +530,8 @@ export default function (pi: ExtensionAPI) {
                 isError: true,
               };
             }
-            const sheet = await sheetsClient.createSpreadsheet(params.title, config.targetFolderId);
+            const folderId = extractFolderId(config.targetFolderId);
+            const sheet = await sheetsClient.createSpreadsheet(params.title, folderId);
             return {
               content: [
                 {
@@ -1208,15 +1209,6 @@ export default function (pi: ExtensionAPI) {
           default:
             return {
               content: [{ type: "text", text: `Unknown operation: ${params.operation}` }],
-              isError: true,
-            };
-        }
-
-          default:
-            return {
-              content: [
-                { type: "text", text: `Unknown operation: ${params.operation}` },
-              ],
               isError: true,
             };
         }

@@ -67,6 +67,11 @@ export class DriveClient {
         : `'${folderId}' in parents`;
     }
 
+    // Add trashed filter if not already in query
+    if (!query.includes('trashed')) {
+      query = query ? `${query} and trashed = false` : 'trashed = false';
+    }
+
     const response = await client.files.list({
       q: query,
       pageSize: options.pageSize || 100,
