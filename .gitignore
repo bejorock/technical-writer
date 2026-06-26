@@ -1,0 +1,34 @@
+node_modules/
+dist/
+*.js
+*.js.map
+*.d.ts
+!.pi/extensions/*.js
+.DS_Store
+
+# Sensitive files - NEVER commit these
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!.pi/settings.json
+!.mcp.json
+
+# Test files
+test-*.ts
+test-*.pdf
+check-*.ts
+check-*.sh
+
+# Generated test output
+image-tool-test/
+pdf-to-images-test/
+snapshots-*/
+
+# Temporary files
+*.tmp
+*.log
+
+# Generated docs
+context.md
+plan.md

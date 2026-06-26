@@ -1,0 +1,43 @@
+{
+  "name": "technical-writer",
+  "version": "0.1.0",
+  "description": "Pi agent extension for Google Docs and Sheets integration",
+  "keywords": [
+    "pi-package"
+  ],
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ],
+    "prompts": [
+      "./prompts"
+    ]
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "google-auth-library": "^10.9.0",
+    "googleapis": "^173.0.0",
+    "pdf2pic": "^2.0.0",
+    "sharp": "^0.35.0",
+    "typebox": "*"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.6"
+  }
+}
