@@ -464,6 +464,162 @@ export class DocsClient {
   }
 
   /**
+   * Set line spacing for a paragraph range
+   * @param spacing - Line spacing percentage (100=single, 150=1.5, 200=double)
+   */
+  async setLineSpacing(
+    documentId: string,
+    startIndex: number,
+    endIndex: number,
+    spacing: number
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateParagraphStyle: {
+              range: {
+                startIndex,
+                endIndex,
+              },
+              paragraphStyle: {
+                lineSpacing: {
+                  magnitude: spacing,
+                  unit: 'PERCENT',
+                },
+              },
+              fields: 'lineSpacing',
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Set paragraph spacing (space before/after)
+   * @param spaceBefore - Space before paragraph in points
+   * @param spaceAfter - Space after paragraph in points
+   */
+  async setParagraphSpacing(
+    documentId: string,
+    startIndex: number,
+    endIndex: number,
+    spaceBefore?: number,
+    spaceAfter?: number
+  ): Promise<void> {
+    const client = await this.getClient();
+    const paragraphStyle: docs_v1.Schema$ParagraphStyle = {};
+    const fields: string[] = [];
+
+    if (spaceBefore !== undefined) {
+      paragraphStyle.spaceAbove = {
+        magnitude: spaceBefore,
+        unit: 'PT',
+      };
+      fields.push('spaceAbove');
+    }
+
+    if (spaceAfter !== undefined) {
+      paragraphStyle.spaceBelow = {
+        magnitude: spaceAfter,
+        unit: 'PT',
+      };
+      fields.push('spaceBelow');
+    }
+
+    if (fields.length === 0) {
+      return;
+    }
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateParagraphStyle: {
+              range: {
+                startIndex,
+                endIndex,
+              },
+              paragraphStyle,
+              fields: fields.join(','),
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Set paragraph indentation
+   * @param indentLeft - Left indent in points
+   * @param indentRight - Right indent in points
+   * @param firstLine - First line indent in points (negative for hanging indent)
+   */
+  async setParagraphIndentation(
+    documentId: string,
+    startIndex: number,
+    endIndex: number,
+    indentLeft?: number,
+    indentRight?: number,
+    firstLine?: number
+  ): Promise<void> {
+    const client = await this.getClient();
+    const paragraphStyle: docs_v1.Schema$ParagraphStyle = {};
+    const fields: string[] = [];
+
+    if (indentLeft !== undefined) {
+      paragraphStyle.indentStart = {
+        magnitude: indentLeft,
+        unit: 'PT',
+      };
+      fields.push('indentStart');
+    }
+
+    if (indentRight !== undefined) {
+      paragraphStyle.indentEnd = {
+        magnitude: indentRight,
+        unit: 'PT',
+      };
+      fields.push('indentEnd');
+    }
+
+    if (firstLine !== undefined) {
+      paragraphStyle.indentFirstLine = {
+        magnitude: firstLine,
+        unit: 'PT',
+      };
+      fields.push('indentFirstLine');
+    }
+
+    if (fields.length === 0) {
+      return;
+    }
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateParagraphStyle: {
+              range: {
+                startIndex,
+                endIndex,
+              },
+              paragraphStyle,
+              fields: fields.join(','),
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
    * Insert a table
    */
   async insertTable(
@@ -503,6 +659,285 @@ export class DocsClient {
         ],
       },
     });
+  }
+
+  /**
+   * Insert a row into a table
+   */
+  async insertTableRow(
+    documentId: string,
+    tableIndex: number,
+    rowIndex: number,
+    insertBelow: boolean = true
+  ): Promise<void> {
+    const client = await this.getClient();
+    const table = await this.getTableByIndex(documentId, tableIndex);
+    if (!table) throw new Error(`Table at index ${tableIndex} not found`);
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            insertTableRow: {
+              tableCellLocation: {
+                tableIndex: 0,
+                rowIndex: insertBelow ? rowIndex : rowIndex - 1,
+                columnIndex: 0,
+              },
+              insertBelow,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Insert a column into a table
+   */
+  async insertTableColumn(
+    documentId: string,
+    tableIndex: number,
+    columnIndex: number,
+    insertRight: boolean = true
+  ): Promise<void> {
+    const client = await this.getClient();
+    const table = await this.getTableByIndex(documentId, tableIndex);
+    if (!table) throw new Error(`Table at index ${tableIndex} not found`);
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            insertTableColumn: {
+              tableCellLocation: {
+                tableIndex: 0,
+                rowIndex: 0,
+                columnIndex: insertRight ? columnIndex : columnIndex - 1,
+              },
+              insertRight,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Delete a row from a table
+   */
+  async deleteTableRow(
+    documentId: string,
+    tableIndex: number,
+    rowIndex: number
+  ): Promise<void> {
+    const client = await this.getClient();
+    const table = await this.getTableByIndex(documentId, tableIndex);
+    if (!table) throw new Error(`Table at index ${tableIndex} not found`);
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            deleteTableRow: {
+              tableCellLocation: {
+                tableIndex: 0,
+                rowIndex,
+                columnIndex: 0,
+              },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Delete a column from a table
+   */
+  async deleteTableColumn(
+    documentId: string,
+    tableIndex: number,
+    columnIndex: number
+  ): Promise<void> {
+    const client = await this.getClient();
+    const table = await this.getTableByIndex(documentId, tableIndex);
+    if (!table) throw new Error(`Table at index ${tableIndex} not found`);
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            deleteTableColumn: {
+              tableCellLocation: {
+                tableIndex: 0,
+                rowIndex: 0,
+                columnIndex,
+              },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Merge cells in a table
+   */
+  async mergeTableCells(
+    documentId: string,
+    tableIndex: number,
+    startRow: number,
+    startCol: number,
+    endRow: number,
+    endCol: number
+  ): Promise<void> {
+    const client = await this.getClient();
+    const table = await this.getTableByIndex(documentId, tableIndex);
+    if (!table) throw new Error(`Table at index ${tableIndex} not found`);
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            mergeTableCells: {
+              tableRange: {
+                tableCellLocation: {
+                  tableIndex: 0,
+                  rowIndex: startRow,
+                  columnSpan: endCol - startCol + 1,
+                  rowSpan: endRow - startRow + 1,
+                },
+              },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Unmerge cells in a table
+   */
+  async unmergeTableCells(
+    documentId: string,
+    tableIndex: number,
+    row: number,
+    col: number
+  ): Promise<void> {
+    const client = await this.getClient();
+    const table = await this.getTableByIndex(documentId, tableIndex);
+    if (!table) throw new Error(`Table at index ${tableIndex} not found`);
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            unmergeTableCells: {
+              tableCellLocation: {
+                tableIndex: 0,
+                rowIndex: row,
+                columnIndex: col,
+              },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Set background color of a table cell
+   */
+  async setTableCellBackground(
+    documentId: string,
+    tableIndex: number,
+    row: number,
+    col: number,
+    color: { red: number; green: number; blue: number }
+  ): Promise<void> {
+    const client = await this.getClient();
+    const table = await this.getTableByIndex(documentId, tableIndex);
+    if (!table) throw new Error(`Table at index ${tableIndex} not found`);
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateTableCellStyle: {
+              tableCellLocation: {
+                tableIndex: 0,
+                rowIndex: row,
+                columnIndex: col,
+              },
+              tableCellStyle: {
+                backgroundColor: {
+                  color: {
+                    rgbColor: color,
+                  },
+                },
+              },
+              fields: 'backgroundColor',
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Set width of a table column
+   */
+  async setTableColumnWidth(
+    documentId: string,
+    tableIndex: number,
+    columnIndex: number,
+    width: number
+  ): Promise<void> {
+    const client = await this.getClient();
+    const table = await this.getTableByIndex(documentId, tableIndex);
+    if (!table) throw new Error(`Table at index ${tableIndex} not found`);
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateTableColumnProperties: {
+              tableStartIndex: 0,
+              columnRange: {
+                startIndex: columnIndex,
+                endIndex: columnIndex + 1,
+              },
+              tableColumnProperties: {
+                width: {
+                  magnitude: width,
+                  unit: 'PT',
+                },
+              },
+              fields: 'width',
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Helper: Get table by index from document
+   */
+  private async getTableByIndex(documentId: string, tableIndex: number): Promise<docs_v1.Schema$Table | null> {
+    const doc = await this.getDocument(documentId);
+    const tables = doc.body?.content?.filter(el => el.table) || [];
+    if (tableIndex >= tables.length) return null;
+    return tables[tableIndex].table || null;
   }
 
   /**
@@ -1413,6 +1848,159 @@ export class DocsClient {
               },
               fields: "useFirstPageHeaderFooter",
             },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Create a footnote at a specific position
+   * @param documentId - The document ID
+   * @param index - Position to insert footnote reference
+   */
+  async createFootnote(documentId: string, index: number): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            createFootnote: {
+              location: {
+                index,
+              },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Create a named range
+   * @param documentId - The document ID
+   * @param name - Name for the range
+   * @param startIndex - Start of range
+   * @param endIndex - End of range
+   */
+  async createNamedRange(
+    documentId: string,
+    name: string,
+    startIndex: number,
+    endIndex: number
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            createNamedRange: {
+              name,
+              range: {
+                startIndex,
+                endIndex,
+              },
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Insert a rich link
+   * @param documentId - The document ID
+   * @param uri - URL to link to
+   * @param index - Position to insert
+   */
+  async insertRichLink(documentId: string, uri: string, index: number): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            insertRichLink: {
+              location: {
+                index,
+              },
+              uri,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Insert a person mention
+   * @param documentId - The document ID
+   * @param personId - Google account ID (email)
+   * @param index - Position to insert
+   */
+  async insertPerson(
+    documentId: string,
+    personId: string,
+    index: number
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            insertPerson: {
+              location: {
+                index,
+              },
+              personId,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Insert a date
+   * @param documentId - The document ID
+   * @param index - Position to insert
+   * @param locale - Date locale (optional, e.g., 'en-US')
+   * @param timeZone - Timezone (optional, e.g., 'America/New_York')
+   */
+  async insertDate(
+    documentId: string,
+    index: number,
+    locale?: string,
+    timeZone?: string
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    const insertDateRequest: docs_v1.Schema$InsertDateRequest = {
+      location: {
+        index,
+      },
+    };
+
+    if (locale) {
+      insertDateRequest.locale = locale;
+    }
+    if (timeZone) {
+      insertDateRequest.timeZone = timeZone;
+    }
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            insertDate: insertDateRequest,
           },
         ],
       },

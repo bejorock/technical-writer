@@ -165,6 +165,22 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
           Type.Literal("set_footer_alignment"),
           Type.Literal("set_page_number_start"),
           Type.Literal("set_first_page_header_footer"),
+          Type.Literal("set_line_spacing"),
+          Type.Literal("set_paragraph_spacing"),
+          Type.Literal("set_paragraph_indentation"),
+          Type.Literal("insert_table_row"),
+          Type.Literal("insert_table_column"),
+          Type.Literal("delete_table_row"),
+          Type.Literal("delete_table_column"),
+          Type.Literal("merge_cells"),
+          Type.Literal("unmerge_cells"),
+          Type.Literal("set_cell_background"),
+          Type.Literal("set_column_width"),
+          Type.Literal("insert_footnote"),
+          Type.Literal("create_named_range"),
+          Type.Literal("insert_rich_link"),
+          Type.Literal("insert_person"),
+          Type.Literal("insert_date"),
         ],
         { description: "Operation to perform" }
       ),
@@ -290,6 +306,58 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
           { description: "Footer type" }
         )
       ),
+      tableIndex: Type.Optional(
+        Type.Number({ description: "Table index (for table operations)" })
+      ),
+      rowIndex: Type.Optional(
+        Type.Number({ description: "Row index (for table row operations)" })
+      ),
+      columnIndex: Type.Optional(
+        Type.Number({ description: "Column index (for table column operations)" })
+      ),
+      insertBelow: Type.Optional(
+        Type.Boolean({ description: "Insert below (true) or above (false) for insert_table_row" })
+      ),
+      insertRight: Type.Optional(
+        Type.Boolean({ description: "Insert right (true) or left (false) for insert_table_column" })
+      ),
+      startRow: Type.Optional(
+        Type.Number({ description: "Start row for merge_cells" })
+      ),
+      startCol: Type.Optional(
+        Type.Number({ description: "Start column for merge_cells" })
+      ),
+      endRow: Type.Optional(
+        Type.Number({ description: "End row for merge_cells" })
+      ),
+      endCol: Type.Optional(
+        Type.Number({ description: "End column for merge_cells" })
+      ),
+      color: Type.Optional(
+        Type.Object({
+          red: Type.Number({ description: "Red component (0-1)" }),
+          green: Type.Number({ description: "Green component (0-1)" }),
+          blue: Type.Number({ description: "Blue component (0-1)" }),
+        }, { description: "RGB color for set_cell_background" })
+      ),
+      width: Type.Optional(
+        Type.Number({ description: "Width in points for set_column_width" })
+      ),
+      namedRangeName: Type.Optional(
+        Type.String({ description: "Name for named range (for create_named_range)" })
+      ),
+      uri: Type.Optional(
+        Type.String({ description: "URL for rich link (for insert_rich_link)" })
+      ),
+      personId: Type.Optional(
+        Type.String({ description: "Google account email (for insert_person)" })
+      ),
+      locale: Type.Optional(
+        Type.String({ description: "Date locale (for insert_date, e.g., en-US)" })
+      ),
+      timeZone: Type.Optional(
+        Type.String({ description: "Timezone (for insert_date, e.g., America/New_York)" })
+      ),
       formatOptions: Type.Optional(
         Type.Object({
           bold: Type.Optional(Type.Boolean({ description: "Apply bold formatting" })),
@@ -301,6 +369,24 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
           foregroundColor: Type.Optional(Type.String({ description: "Text color (hex or rgb)" })),
           backgroundColor: Type.Optional(Type.String({ description: "Background highlight color" })),
         }, { description: "Formatting options" })
+      ),
+      spacing: Type.Optional(
+        Type.Number({ description: "Line spacing percentage (100=single, 150=1.5, 200=double) for set_line_spacing" })
+      ),
+      spaceBefore: Type.Optional(
+        Type.Number({ description: "Space before paragraph in points (for set_paragraph_spacing)" })
+      ),
+      spaceAfter: Type.Optional(
+        Type.Number({ description: "Space after paragraph in points (for set_paragraph_spacing)" })
+      ),
+      indentLeft: Type.Optional(
+        Type.Number({ description: "Left indent in points (for set_paragraph_indentation)" })
+      ),
+      indentRight: Type.Optional(
+        Type.Number({ description: "Right indent in points (for set_paragraph_indentation)" })
+      ),
+      firstLine: Type.Optional(
+        Type.Number({ description: "First line indent in points (for set_paragraph_indentation)" })
       ),
     }),
     async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
@@ -1316,6 +1402,297 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
             );
             return {
               content: [{ type: "text", text: `Set first page header/footer to ${params.useFirstPageHeaderFooter}` }],
+            };
+          }
+
+          case "set_line_spacing": {
+            if (!params.documentId || params.startIndex === undefined || params.endIndex === undefined || params.spacing === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, startIndex, endIndex, and spacing are required" }],
+                isError: true,
+              };
+            }
+            const lineSpacingId = extractFileId(params.documentId);
+            await docsClient.setLineSpacing(
+              lineSpacingId,
+              params.startIndex,
+              params.endIndex,
+              params.spacing
+            );
+            return {
+              content: [{ type: "text", text: `Set line spacing to ${params.spacing}%` }],
+            };
+          }
+
+          case "set_paragraph_spacing": {
+            if (!params.documentId || params.startIndex === undefined || params.endIndex === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, startIndex, and endIndex are required" }],
+                isError: true,
+              };
+            }
+            const paraSpacingId = extractFileId(params.documentId);
+            await docsClient.setParagraphSpacing(
+              paraSpacingId,
+              params.startIndex,
+              params.endIndex,
+              params.spaceBefore,
+              params.spaceAfter
+            );
+            return {
+              content: [{ type: "text", text: `Set paragraph spacing (before: ${params.spaceBefore || 0}, after: ${params.spaceAfter || 0})` }],
+            };
+          }
+
+          case "set_paragraph_indentation": {
+            if (!params.documentId || params.startIndex === undefined || params.endIndex === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, startIndex, and endIndex are required" }],
+                isError: true,
+              };
+            }
+            const indentId = extractFileId(params.documentId);
+            await docsClient.setParagraphIndentation(
+              indentId,
+              params.startIndex,
+              params.endIndex,
+              params.indentLeft,
+              params.indentRight,
+              params.firstLine
+            );
+            return {
+              content: [{ type: "text", text: `Set paragraph indentation (left: ${params.indentLeft || 0}, right: ${params.indentRight || 0}, first: ${params.firstLine || 0})` }],
+            };
+          }
+
+          case "insert_table_row": {
+            if (!params.documentId || params.tableIndex === undefined || params.rowIndex === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, tableIndex, and rowIndex are required" }],
+                isError: true,
+              };
+            }
+            const insertRowId = extractFileId(params.documentId);
+            await docsClient.insertTableRow(
+              insertRowId,
+              params.tableIndex,
+              params.rowIndex,
+              params.insertBelow !== false
+            );
+            return {
+              content: [{ type: "text", text: `Inserted row at index ${params.rowIndex} in table ${params.tableIndex}` }],
+            };
+          }
+
+          case "insert_table_column": {
+            if (!params.documentId || params.tableIndex === undefined || params.columnIndex === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, tableIndex, and columnIndex are required" }],
+                isError: true,
+              };
+            }
+            const insertColId = extractFileId(params.documentId);
+            await docsClient.insertTableColumn(
+              insertColId,
+              params.tableIndex,
+              params.columnIndex,
+              params.insertRight !== false
+            );
+            return {
+              content: [{ type: "text", text: `Inserted column at index ${params.columnIndex} in table ${params.tableIndex}` }],
+            };
+          }
+
+          case "delete_table_row": {
+            if (!params.documentId || params.tableIndex === undefined || params.rowIndex === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, tableIndex, and rowIndex are required" }],
+                isError: true,
+              };
+            }
+            const deleteRowId = extractFileId(params.documentId);
+            await docsClient.deleteTableRow(
+              deleteRowId,
+              params.tableIndex,
+              params.rowIndex
+            );
+            return {
+              content: [{ type: "text", text: `Deleted row at index ${params.rowIndex} from table ${params.tableIndex}` }],
+            };
+          }
+
+          case "delete_table_column": {
+            if (!params.documentId || params.tableIndex === undefined || params.columnIndex === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, tableIndex, and columnIndex are required" }],
+                isError: true,
+              };
+            }
+            const deleteColId = extractFileId(params.documentId);
+            await docsClient.deleteTableColumn(
+              deleteColId,
+              params.tableIndex,
+              params.columnIndex
+            );
+            return {
+              content: [{ type: "text", text: `Deleted column at index ${params.columnIndex} from table ${params.tableIndex}` }],
+            };
+          }
+
+          case "merge_cells": {
+            if (!params.documentId || params.tableIndex === undefined || 
+                params.startRow === undefined || params.startCol === undefined ||
+                params.endRow === undefined || params.endCol === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, tableIndex, startRow, startCol, endRow, and endCol are required" }],
+                isError: true,
+              };
+            }
+            const mergeId = extractFileId(params.documentId);
+            await docsClient.mergeTableCells(
+              mergeId,
+              params.tableIndex,
+              params.startRow,
+              params.startCol,
+              params.endRow,
+              params.endCol
+            );
+            return {
+              content: [{ type: "text", text: `Merged cells from [${params.startRow},${params.startCol}] to [${params.endRow},${params.endCol}] in table ${params.tableIndex}` }],
+            };
+          }
+
+          case "unmerge_cells": {
+            if (!params.documentId || params.tableIndex === undefined || params.rowIndex === undefined || params.columnIndex === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, tableIndex, rowIndex, and columnIndex are required" }],
+                isError: true,
+              };
+            }
+            const unmergeId = extractFileId(params.documentId);
+            await docsClient.unmergeTableCells(
+              unmergeId,
+              params.tableIndex,
+              params.rowIndex,
+              params.columnIndex
+            );
+            return {
+              content: [{ type: "text", text: `Unmerged cell at [${params.rowIndex},${params.columnIndex}] in table ${params.tableIndex}` }],
+            };
+          }
+
+          case "set_cell_background": {
+            if (!params.documentId || params.tableIndex === undefined || 
+                params.rowIndex === undefined || params.columnIndex === undefined || !params.color) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, tableIndex, rowIndex, columnIndex, and color are required" }],
+                isError: true,
+              };
+            }
+            const bgColorId = extractFileId(params.documentId);
+            await docsClient.setTableCellBackground(
+              bgColorId,
+              params.tableIndex,
+              params.rowIndex,
+              params.columnIndex,
+              params.color
+            );
+            return {
+              content: [{ type: "text", text: `Set background color for cell [${params.rowIndex},${params.columnIndex}] in table ${params.tableIndex}` }],
+            };
+          }
+
+          case "set_column_width": {
+            if (!params.documentId || params.tableIndex === undefined || params.columnIndex === undefined || params.width === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, tableIndex, columnIndex, and width are required" }],
+                isError: true,
+              };
+            }
+            const colWidthId = extractFileId(params.documentId);
+            await docsClient.setTableColumnWidth(
+              colWidthId,
+              params.tableIndex,
+              params.columnIndex,
+              params.width
+            );
+            return {
+              content: [{ type: "text", text: `Set width to ${params.width}pt for column ${params.columnIndex} in table ${params.tableIndex}` }],
+            };
+          }
+
+          case "insert_footnote": {
+            if (!params.documentId || params.index === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId and index are required" }],
+                isError: true,
+              };
+            }
+            const footnoteId = extractFileId(params.documentId);
+            await docsClient.createFootnote(footnoteId, params.index);
+            return {
+              content: [{ type: "text", text: `Inserted footnote at index ${params.index}` }],
+            };
+          }
+
+          case "create_named_range": {
+            if (!params.documentId || !params.namedRangeName || params.startIndex === undefined || params.endIndex === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, namedRangeName, startIndex, and endIndex are required" }],
+                isError: true,
+              };
+            }
+            const namedRangeId = extractFileId(params.documentId);
+            await docsClient.createNamedRange(
+              namedRangeId,
+              params.namedRangeName,
+              params.startIndex,
+              params.endIndex
+            );
+            return {
+              content: [{ type: "text", text: `Created named range "${params.namedRangeName}" from ${params.startIndex} to ${params.endIndex}` }],
+            };
+          }
+
+          case "insert_rich_link": {
+            if (!params.documentId || !params.uri || params.index === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, uri, and index are required" }],
+                isError: true,
+              };
+            }
+            const richLinkId = extractFileId(params.documentId);
+            await docsClient.insertRichLink(richLinkId, params.uri, params.index);
+            return {
+              content: [{ type: "text", text: `Inserted rich link to ${params.uri}` }],
+            };
+          }
+
+          case "insert_person": {
+            if (!params.documentId || !params.personId || params.index === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId, personId, and index are required" }],
+                isError: true,
+              };
+            }
+            const personIdVal = extractFileId(params.documentId);
+            await docsClient.insertPerson(personIdVal, params.personId, params.index);
+            return {
+              content: [{ type: "text", text: `Inserted person mention for ${params.personId}` }],
+            };
+          }
+
+          case "insert_date": {
+            if (!params.documentId || params.index === undefined) {
+              return {
+                content: [{ type: "text", text: "Error: documentId and index are required" }],
+                isError: true,
+              };
+            }
+            const dateId = extractFileId(params.documentId);
+            await docsClient.insertDate(dateId, params.index, params.locale, params.timeZone);
+            return {
+              content: [{ type: "text", text: `Inserted date at index ${params.index}` }],
             };
           }
 
