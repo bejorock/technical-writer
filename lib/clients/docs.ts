@@ -71,11 +71,21 @@ export class DocsClient {
   async getDocument(documentId: string): Promise<Document> {
     const client = await this.getClient();
 
-    const response = await client.documents.get({
-      documentId,
-    });
+    try {
+      const response = await client.documents.get({
+        documentId,
+      });
 
-    return response.data as Document;
+      return response.data as Document;
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        throw new Error(`Document not found: ${documentId}`);
+      }
+      if (error.response?.status === 403) {
+        throw new Error(`Permission denied: Cannot access document ${documentId}. Make sure the service account has access.`);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -103,30 +113,16 @@ export class DocsClient {
   }
 
   /**
-   * Rename a document
+   * Get the end index of the document (for appending)
    */
-  async renameDocument(documentId: string, newTitle: string): Promise<void> {
-    const client = await this.getClient();
-
-    await client.documents.batchUpdate({
-      documentId,
-      requestBody: {
-        requests: [
-          {
-            updateDocumentStyle: {
-              documentStyle: {
-                title: newTitle,
-              },
-              fields: "title",
-            },
-          },
-        ],
-      },
-    });
+  async getEndIndex(documentId: string): Promise<number> {
+    const doc = await this.getDocument(documentId);
+    return (doc.body?.content?.slice(-1)[0]?.endIndex || 1) - 1;
   }
 
   /**
    * Insert text at a specific position
+   * For empty documents, use appendText instead
    */
   async insertText(
     documentId: string,
@@ -134,6 +130,20 @@ export class DocsClient {
     index: number
   ): Promise<void> {
     const client = await this.getClient();
+
+    // For index 0, check if document is empty and use append instead
+    if (index === 0) {
+      try {
+        const endIndex = await this.getEndIndex(documentId);
+        if (endIndex <= 1) {
+          // Document is empty, use append
+          await this.appendText(documentId, text);
+          return;
+        }
+      } catch (e) {
+        // Continue with insert attempt
+      }
+    }
 
     await client.documents.batchUpdate({
       documentId,
@@ -156,12 +166,50 @@ export class DocsClient {
    * Append text at the end of the document
    */
   async appendText(documentId: string, text: string): Promise<void> {
+    const client = await this.getClient();
     const doc = await this.getDocument(documentId);
 
     // Get the end index (last character before footer)
     const endIndex = (doc.body?.content?.slice(-1)[0]?.endIndex || 1) - 1;
 
-    await this.insertText(documentId, text, endIndex);
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            insertText: {
+              location: {
+                index: endIndex,
+              },
+              text,
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Rename a document
+   */
+  async renameDocument(documentId: string, newTitle: string): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateDocumentStyle: {
+              documentStyle: {
+                title: newTitle,
+              },
+              fields: "title",
+            },
+          },
+        ],
+      },
+    });
   }
 
   /**
@@ -236,10 +284,23 @@ export class DocsClient {
   ): Promise<void> {
     const client = await this.getClient();
 
+    // For index 0, use append if document is empty
+    let insertIndex = index;
+    if (index === 0) {
+      try {
+        const endIndex = await this.getEndIndex(documentId);
+        if (endIndex <= 1) {
+          insertIndex = endIndex;
+        }
+      } catch (e) {
+        // Continue with original index
+      }
+    }
+
     const requests: docs_v1.Schema$Request[] = [
       {
         insertText: {
-          location: { index },
+          location: { index: insertIndex },
           text: text + "\n",
         },
       },
@@ -249,8 +310,8 @@ export class DocsClient {
       requests.push({
         updateParagraphStyle: {
           range: {
-            startIndex: index,
-            endIndex: index + text.length + 1,
+            startIndex: insertIndex,
+            endIndex: insertIndex + text.length + 1,
           },
           paragraphStyle: {
             namedStyleType: style as any,
@@ -347,6 +408,70 @@ export class DocsClient {
   }
 
   /**
+   * Set paragraph alignment
+   */
+  async setParagraphAlignment(
+    documentId: string,
+    startIndex: number,
+    endIndex: number,
+    alignment: 'LEFT' | 'CENTER' | 'RIGHT' | 'JUSTIFY'
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateParagraphStyle: {
+              range: {
+                startIndex,
+                endIndex,
+              },
+              paragraphStyle: {
+                alignment: alignment as any,
+              },
+              fields: "alignment",
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
+   * Set named style (Heading 1-9, Normal, Title, Subtitle)
+   */
+  async setNamedStyle(
+    documentId: string,
+    startIndex: number,
+    endIndex: number,
+    style: 'NORMAL_TEXT' | 'HEADING_1' | 'HEADING_2' | 'HEADING_3' | 'HEADING_4' | 'HEADING_5' | 'HEADING_6' | 'HEADING_7' | 'HEADING_8' | 'HEADING_9' | 'TITLE' | 'SUBTITLE'
+  ): Promise<void> {
+    const client = await this.getClient();
+
+    await client.documents.batchUpdate({
+      documentId,
+      requestBody: {
+        requests: [
+          {
+            updateParagraphStyle: {
+              range: {
+                startIndex,
+                endIndex,
+              },
+              paragraphStyle: {
+                namedStyleType: style,
+              },
+              fields: "namedStyleType",
+            },
+          },
+        ],
+      },
+    });
+  }
+
+  /**
    * Insert a table
    */
   async insertTable(
@@ -357,6 +482,19 @@ export class DocsClient {
   ): Promise<void> {
     const client = await this.getClient();
 
+    // For index 0, use append if document is empty
+    let insertIndex = index;
+    if (index === 0) {
+      try {
+        const endIndex = await this.getEndIndex(documentId);
+        if (endIndex <= 1) {
+          insertIndex = endIndex;
+        }
+      } catch (e) {
+        // Continue with original index
+      }
+    }
+
     await client.documents.batchUpdate({
       documentId,
       requestBody: {
@@ -364,7 +502,7 @@ export class DocsClient {
           {
             insertTable: {
               location: {
-                index,
+                index: insertIndex,
               },
               rows,
               columns,

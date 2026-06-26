@@ -173,6 +173,18 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
       style: Type.Optional(
         Type.String({ description: "Paragraph style (for insert_paragraph)" })
       ),
+      alignment: Type.Optional(
+        Type.Union(
+          [Type.Literal("LEFT"), Type.Literal("CENTER"), Type.Literal("RIGHT"), Type.Literal("JUSTIFY")],
+          { description: "Paragraph alignment" }
+        )
+      ),
+      namedStyle: Type.Optional(
+        Type.Union(
+          [Type.Literal("NORMAL_TEXT"), Type.Literal("HEADING_1"), Type.Literal("HEADING_2"), Type.Literal("HEADING_3"), Type.Literal("TITLE"), Type.Literal("SUBTITLE")],
+          { description: "Named style (heading, title, etc.)" }
+        )
+      ),
       formatOptions: Type.Optional(
         Type.Object({
           bold: Type.Optional(Type.Boolean({ description: "Apply bold formatting" })),
@@ -379,14 +391,38 @@ Available tools: google_docs, google_sheets, google_drive, google_export, image_
                 isError: true,
               };
             }
-            const formatOptions = params.formatOptions || { bold: true };
             const formatId = extractFileId(params.documentId);
-            await docsClient.formatText(
-              formatId,
-              params.startIndex,
-              params.endIndex,
-              formatOptions
-            );
+            
+            // Apply text formatting if provided
+            if (params.formatOptions) {
+              await docsClient.formatText(
+                formatId,
+                params.startIndex,
+                params.endIndex,
+                params.formatOptions
+              );
+            }
+            
+            // Apply alignment if provided
+            if (params.alignment) {
+              await docsClient.setParagraphAlignment(
+                formatId,
+                params.startIndex,
+                params.endIndex,
+                params.alignment
+              );
+            }
+            
+            // Apply named style if provided
+            if (params.namedStyle) {
+              await docsClient.setNamedStyle(
+                formatId,
+                params.startIndex,
+                params.endIndex,
+                params.namedStyle
+              );
+            }
+            
             return {
               content: [
                 {
